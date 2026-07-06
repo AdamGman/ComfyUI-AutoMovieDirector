@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-automoviedirector"
+description = "Type a movie idea, get a finished short film: Ollama writes the script, LTX 2.3 renders every scene with audio, storyboard approval in between, auto-stitched MP4 out."
+version = "0.3.0"
+license = { text = "MIT" }
+dependencies = ["imageio-ffmpeg"]
+
+[project.urls]
+Repository = "https://github.com/AdamGman/ComfyUI-AutoMovieDirector"
+
+[tool.comfy]
+PublisherId = "adamgman"
+DisplayName = "Auto Movie Director"
+Icon = "🎬"
