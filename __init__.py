@@ -161,6 +161,7 @@ class AMD_MoviePlanner:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("scene_plan", "plot_text")
     FUNCTION = "plan"
+    OUTPUT_NODE = True  # emits per-scene texts to the UI so the scene boxes fill live
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -264,7 +265,8 @@ class AMD_MoviePlanner:
         plan = {"plot": plot, "sheet": sheet, "global_prompt": global_prompt, "scenes": final}
         pretty = (f"PLOT\n{plot}\n\nCHARACTER SHEET\n{sheet}\n\n" if plot or sheet else "") + \
             "\n\n".join(f"[Scene {s['index'] + 1} - {s['seconds']:.1f}s]\n{s['core']}" for s in final)
-        return (json.dumps(plan), pretty)
+        return {"ui": {"scene_texts": [s["core"] for s in final]},
+                "result": (json.dumps(plan), pretty)}
 
 
 class AMD_MovieRenderer:
@@ -351,6 +353,7 @@ class AMD_MovieRenderer:
                 vlat = g.node("EmptyLTXVLatentVideo", width=pw, height=ph, length=1, batch_size=1)
                 samp = scene_sampling(g, sc, i, pw, ph, 1, vlat.out(0), cond.out(0), cond.out(1))
                 vdec = g.node("VAEDecode", samples=samp.out(0), vae=video_vae)
+                g.node("PreviewImage", images=vdec.out(0))  # fires per-scene so the UI fills live
                 frames_ref = vdec.out(0) if frames_ref is None else g.node("ImageBatch", image1=frames_ref, image2=vdec.out(0)).out(0)
             board = g.node("AMD_Storyboard", images=frames_ref, scene_plan=scene_plan, columns=4, save_dir=board_dir)
             g.node("PreviewImage", images=board.out(0))

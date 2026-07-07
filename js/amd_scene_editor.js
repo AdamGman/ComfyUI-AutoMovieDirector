@@ -201,24 +201,58 @@ app.registerExtension({
         };
     },
     setup() {
+        const imgUrl = (im) =>
+            api.apiURL(
+                `/view?filename=${encodeURIComponent(im.filename)}&subfolder=${encodeURIComponent(im.subfolder || "")}&type=${im.type}&t=${Date.now()}`
+            );
+
+        api.addEventListener("execution_start", () => {
+            for (const planner of app.graph._nodes.filter((n) => n.comfyClass === "AMD_MoviePlanner")) {
+                planner._amdFill = 0;
+            }
+        });
+
         api.addEventListener("executed", ({ detail }) => {
-            const images = detail?.output?.images;
-            if (!images?.length) return;
             const execNode = String(detail.node ?? detail.display_node ?? "");
+            const out = detail?.output;
+            if (!out) return;
+
             for (const planner of app.graph._nodes.filter((n) => n.comfyClass === "AMD_MoviePlanner")) {
                 const rows = planner._amdRows || [];
-                if (!rows.length || images.length !== rows.length) continue;
+                if (!rows.length) continue;
+
+                // 1. the planner itself finished: drop each AI-written scene text into its box placeholder
+                if (out.scene_texts && execNode === String(planner.id)) {
+                    out.scene_texts.forEach((t, i) => {
+                        if (rows[i] && !rows[i].textarea.value) {
+                            rows[i].textarea.placeholder = `AI · Scene ${i + 1}: ${t}`;
+                            rows[i].textarea.title = t;
+                        }
+                    });
+                    planner.setDirtyCanvas(true, true);
+                    continue;
+                }
+
                 const rid = rendererIdFor(planner);
                 if (!rid) continue;
-                if (execNode !== rid && !execNode.startsWith(rid + ".") && !execNode.startsWith(rid + ":")) continue;
-                images.forEach((im, i) => {
-                    if (!rows[i]) return;
-                    const url = api.apiURL(
-                        `/view?filename=${encodeURIComponent(im.filename)}&subfolder=${encodeURIComponent(im.subfolder || "")}&type=${im.type}&t=${Date.now()}`
-                    );
-                    rows[i].img.src = url;
-                });
-                planner.setDirtyCanvas(true, true);
+                const fromRenderer = execNode === rid || execNode.startsWith(rid + ".") || execNode.startsWith(rid + ":");
+                if (!fromRenderer || !out.images?.length) continue;
+
+                if (out.images.length === 1) {
+                    // 2. live: each scene preview lands as soon as it renders, in scene order
+                    const i = planner._amdFill ?? 0;
+                    if (rows[i]) {
+                        rows[i].img.src = imgUrl(out.images[0]);
+                        planner._amdFill = i + 1;
+                        planner.setDirtyCanvas(true, true);
+                    }
+                } else if (out.images.length === rows.length) {
+                    // 3. final batch: authoritative pass, fixes any ordering drift
+                    out.images.forEach((im, i) => {
+                        if (rows[i]) rows[i].img.src = imgUrl(im);
+                    });
+                    planner.setDirtyCanvas(true, true);
+                }
             }
         });
     },
