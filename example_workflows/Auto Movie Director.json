@@ -1,8 +1,8 @@
 {
   "id": "auto-movie-director",
   "revision": 0,
-  "last_node_id": 11,
-  "last_link_id": 8,
+  "last_node_id": 12,
+  "last_link_id": 9,
   "nodes": [
     {
       "id": 1,
@@ -100,17 +100,57 @@
     },
     {
       "id": 4,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        40,
+        290
+      ],
+      "size": [
+        400,
+        90
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            3
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "LTX2.3_Crisp_Enhance.safetensors",
+        0.5
+      ],
+      "title": "Crisp Enhance (optional - delete if you lack the LoRA)"
+    },
+    {
+      "id": 5,
       "type": "DualCLIPLoader",
       "pos": [
         40,
-        330
+        430
       ],
       "size": [
         400,
         130
       ],
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -118,7 +158,7 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            3
+            4
           ],
           "slot_index": 0
         }
@@ -134,43 +174,11 @@
       ]
     },
     {
-      "id": 5,
-      "type": "VAELoader",
-      "pos": [
-        40,
-        520
-      ],
-      "size": [
-        400,
-        60
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "VAE",
-          "type": "VAE",
-          "links": [
-            4
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "VAELoader"
-      },
-      "widgets_values": [
-        "LTX23_video_vae_bf16.safetensors"
-      ]
-    },
-    {
       "id": 6,
       "type": "VAELoader",
       "pos": [
         40,
-        630
+        620
       ],
       "size": [
         400,
@@ -194,15 +202,15 @@
         "Node name for S&R": "VAELoader"
       },
       "widgets_values": [
-        "LTX23_audio_vae_bf16.safetensors"
+        "LTX23_video_vae_bf16.safetensors"
       ]
     },
     {
       "id": 7,
-      "type": "LatentUpscaleModelLoader",
+      "type": "VAELoader",
       "pos": [
         40,
-        740
+        730
       ],
       "size": [
         400,
@@ -214,10 +222,42 @@
       "inputs": [],
       "outputs": [
         {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            6
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "LTX23_audio_vae_bf16.safetensors"
+      ]
+    },
+    {
+      "id": 8,
+      "type": "LatentUpscaleModelLoader",
+      "pos": [
+        40,
+        840
+      ],
+      "size": [
+        400,
+        60
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
           "name": "LATENT_UPSCALE_MODEL",
           "type": "LATENT_UPSCALE_MODEL",
           "links": [
-            7
+            8
           ],
           "slot_index": 0
         }
@@ -228,7 +268,7 @@
       "widgets_values": []
     },
     {
-      "id": 8,
+      "id": 9,
       "type": "AMD_MoviePlanner",
       "pos": [
         520,
@@ -239,7 +279,7 @@
         560
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -253,7 +293,7 @@
           "name": "scene_plan",
           "type": "STRING",
           "links": [
-            6
+            7
           ],
           "slot_index": 0
         },
@@ -261,7 +301,7 @@
           "name": "plot_text",
           "type": "STRING",
           "links": [
-            8
+            9
           ],
           "slot_index": 1
         }
@@ -282,7 +322,7 @@
       ]
     },
     {
-      "id": 9,
+      "id": 10,
       "type": "AMD_MovieRenderer",
       "pos": [
         1060,
@@ -293,38 +333,38 @@
         560
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
           "name": "model",
           "type": "MODEL",
-          "link": 2
+          "link": 3
         },
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 3
+          "link": 4
         },
         {
           "name": "video_vae",
           "type": "VAE",
-          "link": 4
+          "link": 5
         },
         {
           "name": "audio_vae",
           "type": "VAE",
-          "link": 5
+          "link": 6
         },
         {
           "name": "scene_plan",
           "type": "STRING",
-          "link": 6
+          "link": 7
         },
         {
           "name": "upscale_model",
           "type": "LATENT_UPSCALE_MODEL",
-          "link": 7
+          "link": 8
         }
       ],
       "outputs": [
@@ -340,7 +380,7 @@
       }
     },
     {
-      "id": 10,
+      "id": 11,
       "type": "MarkdownNote",
       "pos": [
         1580,
@@ -351,7 +391,7 @@
         300
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -363,7 +403,7 @@
       "bgcolor": "#653"
     },
     {
-      "id": 11,
+      "id": 12,
       "type": "PreviewAny",
       "pos": [
         1580,
@@ -374,13 +414,13 @@
         380
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 8
+          "link": 9
         }
       ],
       "outputs": [
@@ -410,7 +450,7 @@
       2,
       3,
       0,
-      9,
+      4,
       0,
       "MODEL"
     ],
@@ -418,47 +458,55 @@
       3,
       4,
       0,
-      9,
+      10,
+      0,
+      "MODEL"
+    ],
+    [
+      4,
+      5,
+      0,
+      10,
       1,
       "CLIP"
     ],
     [
-      4,
       5,
+      6,
       0,
-      9,
+      10,
       2,
       "VAE"
     ],
     [
-      5,
       6,
+      7,
       0,
-      9,
+      10,
       3,
       "VAE"
     ],
     [
-      6,
-      8,
-      0,
+      7,
       9,
+      0,
+      10,
       4,
       "STRING"
     ],
     [
-      7,
-      7,
+      8,
+      8,
       0,
-      9,
+      10,
       5,
       "LATENT_UPSCALE_MODEL"
     ],
     [
-      8,
-      8,
+      9,
+      9,
       1,
-      11,
+      12,
       0,
       "STRING"
     ]
@@ -470,7 +518,7 @@
         20,
         -10,
         450,
-        850
+        950
       ],
       "color": "#3f5159",
       "font_size": 22,
