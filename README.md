@@ -2,10 +2,13 @@
 
 # 🎬 Auto Movie Director
 
-### Type a movie idea. Get a finished short film — with sound.
+### A ComfyUI **custom node pack**: type a movie idea, get a finished short film — with sound.
+
+Seven nodes (planner · renderer · stitcher · storyboard + helpers) you can wire any way you like.
+The included workflow is just the recommended wiring — **the nodes are the product.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
-[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom_nodes-blue)](https://github.com/comfyanonymous/ComfyUI)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom_node_pack-blue)](https://github.com/comfyanonymous/ComfyUI)
 [![LTX 2.3](https://img.shields.io/badge/LTX-2.3_video+audio-purple)](https://github.com/Lightricks/ComfyUI-LTXVideo)
 [![Ollama](https://img.shields.io/badge/Ollama-any_model,_auto--installed-green)](https://ollama.com)
 
@@ -60,6 +63,17 @@ That's the storyboard. Approve it, set mode to `2) full movie`, Queue again. �
 | **Per-scene overrides**: your line beats the AI's | **`preview_size`**: storyboard speed vs detail |
 
 **Three render modes:** `1) storyboard preview` → `2) full movie (img2vid from storyboard)` — maximum faithfulness to what you approved — or `full movie (pure text2vid)` for the freest, most photographic look.
+
+## The nodes you get
+
+All under the **AdamGman → 🎬 Auto Movie Director** category in the node menu:
+
+| Node | Job |
+|---|---|
+| 🎬 **Movie Planner (Ollama)** | idea → plot, character sheet, per-scene prompts with shot grammar + sound design. Grows per-scene override boxes with live thumbnails right on the node. |
+| 🎬 **Movie Renderer (LTX scenes)** | one node that expands into a full LTX render chain per scene at runtime — storyboard / img2vid / text2vid modes, every quality dial exposed. |
+| 🎬 **Movie Stitcher** | ffmpeg-concats the scenes into one MP4 (H.264 + AAC), previews it on the node. |
+| 🎬 Storyboard · Scene Writer · Load Frame · Path Join | the renderer's building blocks — usable standalone in your own graphs. |
 
 ## What the AI director actually does
 
