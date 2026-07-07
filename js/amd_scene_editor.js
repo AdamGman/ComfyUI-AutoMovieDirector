@@ -97,17 +97,47 @@ function rebuildRows(node) {
     node.setDirtyCanvas(true, true);
 }
 
-function pinPromptHeight(node) {
-    const gp = findWidget(node, "global_prompt");
-    if (gp) {
-        gp.options = gp.options || {};
-        gp.options.getMinHeight = () => 150;
-        gp.options.getMaxHeight = () => 150;
-        if (gp.inputEl) {
-            gp.inputEl.style.height = "150px";
-            gp.inputEl.style.resize = "none";
+function buildIdeaBox(node) {
+    const gpW = findWidget(node, "global_prompt");
+    if (!gpW || node._amdIdea) return;
+    // hide the stock flexible widget; we render our own fixed-height box synced to it
+    gpW.computeSize = () => [0, -4];
+    if (gpW.inputEl) gpW.inputEl.style.display = "none";
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "width:100%;height:100%;box-sizing:border-box;padding:1px;";
+    const ta = document.createElement("textarea");
+    ta.value = gpW.value || "";
+    ta.placeholder = "Your movie idea — describe the hero physically (body plan, eyes, size) for cross-scene consistency";
+    ta.style.cssText =
+        "width:100%;height:100%;resize:none;box-sizing:border-box;background:#1b1b22;color:#ddd;" +
+        "border:1px solid #3a3a46;border-radius:6px;font:13px monospace;padding:8px;outline:none;";
+    ta.addEventListener("input", () => { gpW.value = ta.value; });
+    ta.addEventListener("pointerdown", (e) => e.stopPropagation());
+    wrap.append(ta);
+
+    const w = node.addDOMWidget("movie_idea", "div", wrap, {
+        serialize: false,
+        getMinHeight: () => 170,
+        getMaxHeight: () => 170,
+        getHeight: () => 170,
+    });
+    if (w) {
+        w.serializeValue = () => undefined;
+        w.computeSize = (ww) => [ww, 170];
+        const wi = node.widgets.indexOf(w);
+        const gi = node.widgets.indexOf(gpW);
+        if (wi >= 0 && gi >= 0 && wi !== gi + 1) {
+            node.widgets.splice(wi, 1);
+            node.widgets.splice(node.widgets.indexOf(gpW) + 1, 0, w);
         }
     }
+    node._amdIdea = ta;
+}
+
+function refreshIdeaBox(node) {
+    const gpW = findWidget(node, "global_prompt");
+    if (node._amdIdea && gpW) node._amdIdea.value = gpW.value || "";
 }
 
 function rendererIdFor(planner) {
@@ -147,7 +177,7 @@ app.registerExtension({
                 };
             }
             setTimeout(() => {
-                pinPromptHeight(node);
+                buildIdeaBox(node);
                 rebuildRows(node);
             }, 0);
             return r;
@@ -156,7 +186,11 @@ app.registerExtension({
         const onConfigure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function () {
             const r = onConfigure?.apply(this, arguments);
-            setTimeout(() => rebuildRows(this), 0);
+            setTimeout(() => {
+                buildIdeaBox(this);
+                refreshIdeaBox(this);
+                rebuildRows(this);
+            }, 0);
             return r;
         };
     },
