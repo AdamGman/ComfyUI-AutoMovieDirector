@@ -237,6 +237,7 @@ app.registerExtension({
                 if (!rid) continue;
                 const fromRenderer = execNode === rid || execNode.startsWith(rid + ".") || execNode.startsWith(rid + ":");
                 if (!fromRenderer || !out.images?.length) continue;
+                if (out.animated?.length) continue; // the final movie preview, not a scene thumb
 
                 if (out.images.length === 1) {
                     // 2. live: each scene preview lands as soon as it renders, in scene order

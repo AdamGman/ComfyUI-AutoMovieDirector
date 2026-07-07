@@ -85,12 +85,14 @@ The Planner turns your sentence into a **three-act screenplay**: a character she
 <details>
 <summary><b>Where files land</b></summary>
 
+Everything for one movie lives in one project folder:
+
 ```
-output/
-├── auto_movie_<timestamp>.mp4        ← 🍿 the film (video + audio)
-└── auto_movie/
-    ├── storyboard_<id>/              ← storyboard.png · scene_XX.png · scenes.txt
-    └── <run_id>/                     ← per-scene MP4s · plot.txt
+output/auto_movie/<your_movie_title>_<id>/
+├── <name>_<run>.mp4       ← 🍿 the finished film (video + audio)
+├── plot.txt               ← the script
+├── storyboard/            ← storyboard.png · scene_XX.png · scenes.txt
+└── takes/<run>/           ← the individual scene MP4s of each render
 ```
 
 </details>

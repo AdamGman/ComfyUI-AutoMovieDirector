@@ -52,7 +52,9 @@ _PLANNER_SYSTEM = (
     "FORBIDDEN, as are 'sparks', 'glitter', 'film grain', 'flickering': storms read as sheets of streaking "
     "rain, wet reflections, and a soft glow inside the clouds. Rain is always streaks in motion, never specks.\n"
     "9. Verbs must match the subject's stated anatomy: a robot on treads ROLLS or SITS PARKED — it never "
-    "stands, walks, kneels, or grows legs. Never give the subject body parts the character sheet doesn't list."
+    "stands, walks, kneels, or grows legs. Never give the subject body parts the character sheet doesn't list.\n"
+    "10. The FIRST sentence of every scene prompt must name the subject and its single main action plainly "
+    "(the video model weights early words most). Atmosphere, background and camera detail come after."
 )
 
 
@@ -154,6 +156,12 @@ def _fallback_scenes(global_prompt, style, n):
 def _plan_hash(scenes, seed):
     payload = json.dumps([s["prompt"] for s in scenes]) + f"|{seed}"
     return hashlib.md5(payload.encode("utf-8")).hexdigest()[:10]
+
+
+def _project_rel(plan, phash):
+    """One folder per movie project: output/auto_movie/<title-slug>_<planhash>."""
+    slug = re.sub(r"[^\w]+", "_", (plan.get("global_prompt") or "movie").lower()).strip("_")[:40].rstrip("_")
+    return os.path.join("auto_movie", f"{slug or 'movie'}_{phash}")
 
 
 class AMD_MoviePlanner:
@@ -290,13 +298,14 @@ class AMD_MovieRenderer:
                 "width": ("INT", {"default": 1536, "min": 256, "max": 2048, "step": 32}),
                 "height": ("INT", {"default": 864, "min": 256, "max": 2048, "step": 32}),
                 "fps": ("INT", {"default": 24, "min": 8, "max": 60}),
-                "steps": ("INT", {"default": 8, "min": 1, "max": 60}),
+                "steps": ("INT", {"default": 10, "min": 1, "max": 60}),
                 "cfg": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 15.0, "step": 0.1}),
                 "sampler": (comfy.samplers.SAMPLER_NAMES, {"default": "euler"}),
                 "scheduler": (comfy.samplers.SCHEDULER_NAMES, {"default": "linear_quadratic"}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 2**63 - 1, "control_after_generate": False}),
-                "preview_size": ("INT", {"default": 1024, "min": 256, "max": 1536, "step": 32, "tooltip": "Width of the fast storyboard preview frames. Previews are composition proofs - faces and fine detail refine in the full render. Raise toward 1536 for prettier previews of people, lower for speed."}),
-                "storyboard_strength": ("FLOAT", {"default": 0.8, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "How strongly each scene sticks to its storyboard frame in img2vid mode. Lower = more natural/free, higher = more faithful to the exact frame."}),
+                "apply_stg": ("BOOLEAN", {"default": True, "tooltip": "Spatio-temporal guidance: better prompt adherence and detail at cfg 1 for a small speed cost."}),
+                "preview_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 32, "tooltip": "Width of the storyboard preview frames. 0 = match the final width (best: full-quality frames that also guide img2vid). Lower for faster, rougher boards."}),
+                "storyboard_strength": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "How strongly each scene sticks to its storyboard frame in img2vid mode. Lower = more natural/free, higher = more faithful to the exact frame."}),
                 "filename_prefix": ("STRING", {"default": "auto_movie"}),
                 "output_dir": ("STRING", {"default": "", "tooltip": "Optional extra folder for the final movie. Always also saved to the ComfyUI output folder."}),
             },
@@ -308,17 +317,18 @@ class AMD_MovieRenderer:
     def render(self, model, clip, video_vae, audio_vae, scene_plan, mode, width, height,
                fps, steps, cfg, sampler, scheduler, seed, preview_size,
                storyboard_strength, filename_prefix, output_dir="",
-               upscale_model=None, use_storyboard_frames=True, **_legacy):
+               upscale_model=None, use_storyboard_frames=True, apply_stg=True, **_legacy):
         m = str(mode).lower()
         is_preview = m.startswith("1") or "preview" in m or "editor" in m
         want_i2v = (not is_preview) and ("text2vid" not in m) and bool(use_storyboard_frames)
         return self._render(model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                             width, height, fps, steps, cfg, sampler, scheduler, seed,
-                            preview_size, storyboard_strength, filename_prefix, output_dir, upscale_model)
+                            preview_size, storyboard_strength, filename_prefix, output_dir,
+                            upscale_model, apply_stg)
 
     def _render(self, model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                 width, height, fps, steps, cfg, sampler, scheduler, seed, preview_size,
-                storyboard_strength, filename_prefix, output_dir, upscale_model):
+                storyboard_strength, filename_prefix, output_dir, upscale_model, apply_stg=True):
         from comfy_execution.graph_utils import GraphBuilder
 
         plan = json.loads(scene_plan)
@@ -330,20 +340,28 @@ class AMD_MovieRenderer:
         width = max(256, (int(width) // 32) * 32)
         height = max(256, (int(height) // 32) * 32)
         phash = _plan_hash(scenes, seed)
-        board_dir = os.path.join(folder_paths.get_output_directory(), "auto_movie", f"storyboard_{phash}")
+        proj_rel = _project_rel(plan, phash)
+        board_dir = os.path.join(folder_paths.get_output_directory(), proj_rel, "storyboard")
 
-        def scene_sampling(g, sc, i, w, h, frames, latent_ref, pos_ref, neg_ref):
+        def stg_model(g):
+            if apply_stg:
+                return g.node("LTXVApplySTG", model=model, block_indices="14, 19").out(0)
+            return model
+
+        def scene_sampling(g, the_model, sc, i, w, h, frames, latent_ref, pos_ref, neg_ref):
             noise = g.node("RandomNoise", noise_seed=(int(seed) + i) & (2**63 - 1))
             ks = g.node("KSamplerSelect", sampler_name=sampler)
-            sch = g.node("BasicScheduler", model=model, scheduler=scheduler, steps=int(steps), denoise=1.0)
-            gd = g.node("CFGGuider", model=model, positive=pos_ref, negative=neg_ref, cfg=float(cfg))
+            sch = g.node("BasicScheduler", model=the_model, scheduler=scheduler, steps=int(steps), denoise=1.0)
+            gd = g.node("CFGGuider", model=the_model, positive=pos_ref, negative=neg_ref, cfg=float(cfg))
             return g.node("SamplerCustomAdvanced", noise=noise.out(0), guider=gd.out(0),
                           sampler=ks.out(0), sigmas=sch.out(0), latent_image=latent_ref)
 
         if is_preview:
-            pw = max(256, (int(preview_size) // 32) * 32)
+            pw = int(preview_size) if int(preview_size) > 0 else int(width)
+            pw = max(256, (pw // 32) * 32)
             ph = max(256, int(round(pw * height / width / 32)) * 32)
             g = GraphBuilder()
+            the_model = stg_model(g)
             frames_ref = None
             for sc in scenes:
                 i = int(sc["index"])
@@ -351,7 +369,7 @@ class AMD_MovieRenderer:
                 zero = g.node("ConditioningZeroOut", conditioning=enc.out(0))
                 cond = g.node("LTXVConditioning", positive=enc.out(0), negative=zero.out(0), frame_rate=float(fps))
                 vlat = g.node("EmptyLTXVLatentVideo", width=pw, height=ph, length=1, batch_size=1)
-                samp = scene_sampling(g, sc, i, pw, ph, 1, vlat.out(0), cond.out(0), cond.out(1))
+                samp = scene_sampling(g, the_model, sc, i, pw, ph, 1, vlat.out(0), cond.out(0), cond.out(1))
                 vdec = g.node("VAEDecode", samples=samp.out(0), vae=video_vae)
                 g.node("PreviewImage", images=vdec.out(0))  # fires per-scene so the UI fills live
                 frames_ref = vdec.out(0) if frames_ref is None else g.node("ImageBatch", image1=frames_ref, image2=vdec.out(0)).out(0)
@@ -371,6 +389,7 @@ class AMD_MovieRenderer:
                   f"(Run '1) storyboard preview' first with the same prompts+seed to lock compositions.)")
 
         g = GraphBuilder()
+        the_model = stg_model(g)
         paths_ref = None
         for sc in scenes:
             i = int(sc["index"])
@@ -395,16 +414,21 @@ class AMD_MovieRenderer:
                 pos_ref, neg_ref, vlat_ref = cond.out(0), cond.out(1), vlat.out(0)
             alat = g.node("LTXVEmptyLatentAudio", frames_number=frames, frame_rate=fps, batch_size=1, audio_vae=audio_vae)
             av = g.node("LTXVConcatAVLatent", video_latent=vlat_ref, audio_latent=alat.out(0))
-            samp = scene_sampling(g, sc, i, width, height, frames, av.out(0), pos_ref, neg_ref)
+            samp = scene_sampling(g, the_model, sc, i, width, height, frames, av.out(0), pos_ref, neg_ref)
             sep = g.node("LTXVSeparateAVLatent", av_latent=samp.out(0))
             vdec = g.node("VAEDecode", samples=sep.out(0), vae=video_vae)
             adec = g.node("LTXVAudioVAEDecode", samples=sep.out(1), audio_vae=audio_vae)
             wr = g.node("AMD_SceneWriter", images=vdec.out(0), audio=adec.out(0),
-                        fps=fps, scene_index=i, run_id=run_id)
+                        fps=fps, scene_index=i,
+                        run_id=run_id, out_rel=os.path.join(proj_rel, "takes", run_id))
             paths_ref = wr.out(0) if paths_ref is None else g.node("AMD_PathJoin", a=paths_ref, b=wr.out(0)).out(0)
 
+        script_text = ((plan.get("plot", "") + "\n\nCHARACTER SHEET\n" + plan.get("sheet", "")).strip() + "\n\n" +
+                       "\n\n".join(f"[Scene {s['index'] + 1} - {s['seconds']:.1f}s]\n{s.get('core', s['prompt'])}"
+                                   for s in scenes)).strip()
         st = g.node("AMD_Stitcher", paths=paths_ref, filename_prefix=filename_prefix,
-                    plot_text=plan.get("plot", ""), run_id=run_id, output_dir=output_dir)
+                    plot_text=script_text, run_id=run_id, output_dir=output_dir,
+                    proj_rel=proj_rel)
         return {"result": (st.out(0),), "expand": g.finalize()}
 
 
@@ -443,13 +467,17 @@ class AMD_SceneWriter:
                 "fps": ("INT", {"default": 24, "min": 1, "max": 120}),
                 "scene_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
                 "run_id": ("STRING", {"default": "run"}),
+                "out_rel": ("STRING", {"default": ""}),
             }
         }
 
-    def write(self, images, audio, fps, scene_index, run_id):
+    def write(self, images, audio, fps, scene_index, run_id, out_rel=""):
+        import numpy as np
+        from PIL import Image
         from comfy_api.latest import InputImpl, Types
 
-        out_dir = os.path.join(folder_paths.get_output_directory(), "auto_movie", run_id)
+        rel = out_rel.strip() or os.path.join("auto_movie", run_id)
+        out_dir = os.path.join(folder_paths.get_output_directory(), rel)
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"scene_{scene_index:02d}.mp4")
         video = InputImpl.VideoFromComponents(
@@ -457,7 +485,19 @@ class AMD_SceneWriter:
         )
         video.save_to(path, format=Types.VideoContainer.MP4, codec=Types.VideoCodec.H264)
         print(f"[AutoMovieDirector] wrote {path}")
-        return (path,)
+
+        # emit a mid-frame thumbnail so the scene's box in the UI fills as each scene finishes
+        ui = {}
+        try:
+            mid = (images[images.shape[0] // 2].cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+            tdir = folder_paths.get_temp_directory()
+            os.makedirs(tdir, exist_ok=True)
+            tname = f"amd_{run_id}_scene_{scene_index:02d}.png"
+            Image.fromarray(mid).save(os.path.join(tdir, tname))
+            ui = {"images": [{"filename": tname, "subfolder": "", "type": "temp"}]}
+        except Exception as e:
+            print(f"[AutoMovieDirector] scene thumbnail skipped: {e}")
+        return {"ui": ui, "result": (path,)}
 
 
 class AMD_PathJoin:
@@ -490,10 +530,11 @@ class AMD_Stitcher:
                 "plot_text": ("STRING", {"default": ""}),
                 "run_id": ("STRING", {"default": "run"}),
                 "output_dir": ("STRING", {"default": ""}),
+                "proj_rel": ("STRING", {"default": ""}),
             }
         }
 
-    def stitch(self, paths, filename_prefix, plot_text, run_id, output_dir=""):
+    def stitch(self, paths, filename_prefix, plot_text, run_id, output_dir="", proj_rel=""):
         import imageio_ffmpeg
 
         files = [p for p in paths.splitlines() if p.strip()]
@@ -504,7 +545,10 @@ class AMD_Stitcher:
         out_root = folder_paths.get_output_directory()
         safe_prefix = re.sub(r"[^\w\-]+", "_", filename_prefix) or "auto_movie"
         final_name = f"{safe_prefix}_{run_id}.mp4"
-        final_path = os.path.join(out_root, final_name)
+        sub = proj_rel.strip().replace("\\", "/")
+        final_dir = os.path.join(out_root, proj_rel.strip()) if sub else out_root
+        os.makedirs(final_dir, exist_ok=True)
+        final_path = os.path.join(final_dir, final_name)
 
         list_path = os.path.join(os.path.dirname(files[0]), "concat.txt")
         with open(list_path, "w", encoding="utf-8") as f:
@@ -519,9 +563,9 @@ class AMD_Stitcher:
         if r.returncode != 0:
             raise RuntimeError(f"ffmpeg concat failed: {r.stderr[-1200:]}")
 
-        if plot_text:
-            with open(os.path.join(os.path.dirname(files[0]), "plot.txt"), "w", encoding="utf-8") as f:
-                f.write(plot_text)
+        if plot_text.strip():
+            with open(os.path.join(final_dir, "plot.txt"), "w", encoding="utf-8") as f:
+                f.write(plot_text.strip() + "\n")
 
         result_path = final_path
         if output_dir.strip():
@@ -537,7 +581,7 @@ class AMD_Stitcher:
                 result_path = final_path
 
         print(f"[AutoMovieDirector] finished movie: {final_path}")
-        preview = {"filename": final_name, "subfolder": "", "type": "output"}
+        preview = {"filename": final_name, "subfolder": sub, "type": "output"}
         return {"ui": {"images": [preview], "animated": (True,)}, "result": (result_path,)}
 
 
