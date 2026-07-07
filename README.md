@@ -62,7 +62,9 @@ That's the storyboard. Approve it, set mode to `2) full movie`, Queue again. �
 | **Style**: one field appended to every scene | **`storyboard_strength`**: how hard scenes stick to approved frames |
 | **Per-scene overrides**: your line beats the AI's | **`preview_size`**: storyboard speed vs detail |
 
-**Three render modes:** `1) storyboard preview` → `2) full movie (img2vid from storyboard)` — maximum faithfulness to what you approved — or `full movie (pure text2vid)` for the freest, most photographic look.
+**Four render modes:** `1) storyboard preview` → **`2) full movie (continuity)`** — the movie mode: the planner designs 2–5 recurring locations, each gets a rendered anchor plate so the camera returns to *the same room* every time; scenes tagged `flow` physically start from the previous scene's last frame so action carries across cuts; and every location's anchor **evolves** with what happens in it (tape the window in scene 9 and it's still taped in scene 14). Or `3) from storyboard frames` (each scene starts on its approved board frame) and `4) pure text2vid` (independent scenes, freest look). `flow_strength` / `cut_strength` dials control how hard continuity binds.
+
+> Long films: launch ComfyUI with `--cache-lru 60` (the included start script does) to keep RAM bounded across many scenes.
 
 ## The nodes you get
 

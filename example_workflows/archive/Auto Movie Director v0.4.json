@@ -1,4 +1,4 @@
-{
+﻿{
   "id": "auto-movie-director",
   "revision": 0,
   "last_node_id": 12,
@@ -397,7 +397,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### fast frames = approve before you render\n\n## 2) full movie (continuity)\n### THE movie mode: same rooms every time, action flows across cuts\n\n## 3) from storyboard frames\n### every scene starts on its approved frame\n\n## 4) pure text2vid\n### independent scenes, freest look\n\n# Board → approve → mode 2 → Queue"
+        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### fast frames = your movie's first frames\n\n## 2) full movie (img2vid)\n### every scene STARTS from its approved storyboard frame\n\n## full movie (pure text2vid)\n### skip the storyboard, prompt-only scenes\n\n# Preview → approve → flip to 2) → Queue"
       ],
       "color": "#432",
       "bgcolor": "#653"

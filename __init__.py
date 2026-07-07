@@ -54,7 +54,13 @@ _PLANNER_SYSTEM = (
     "9. Verbs must match the subject's stated anatomy: a robot on treads ROLLS or SITS PARKED — it never "
     "stands, walks, kneels, or grows legs. Never give the subject body parts the character sheet doesn't list.\n"
     "10. The FIRST sentence of every scene prompt must name the subject and its single main action plainly "
-    "(the video model weights early words most). Atmosphere, background and camera detail come after."
+    "(the video model weights early words most). Atmosphere, background and camera detail come after.\n"
+    "11. Design LOCATIONS: 2-5 recurring places, each pinned in one sentence of exact reusable words "
+    "(architecture, furniture, colors, window placement). Films RETURN to places - reuse locations across "
+    "scenes instead of inventing a new place per scene.\n"
+    "12. Tag every scene with its location id and a continuity value: 'flow' when it directly continues the "
+    "previous scene's action in the same location with no time jump, otherwise 'cut'. Use runs of 2-4 'flow' "
+    "scenes for the important moments so action visibly carries across cuts."
 )
 
 
@@ -219,6 +225,8 @@ class AMD_MoviePlanner:
 
         plot, sheet, caption = "", "", ""
         scenes = None
+        locations = {}
+        scene_meta = []
         if image is not None and use_ollama:
             caption = self._caption(image, ollama_url, ollama_model, llm_seed)
 
@@ -229,9 +237,11 @@ class AMD_MoviePlanner:
                 f"Movie brief: {brief}\n\nVisual style: {style}\n\n"
                 f"Write a cohesive short-film plot for exactly {n} scenes of ~{seconds_per_scene:.0f} seconds each, "
                 f"following three-act structure with the climax about three quarters of the way through. "
-                f'Also write a "character_sheet": ONE sentence physically describing the recurring subject(s) and '
-                f"location palette in exact reusable words (colors, materials, size, distinguishing marks). "
-                f'Reply as JSON: {{"plot": "...", "character_sheet": "...", "scenes": ["scene 1 prompt", ...]}} '
+                f'Also write a "character_sheet": ONE sentence physically describing the recurring subject(s) in '
+                f"exact reusable words (colors, materials, size, distinguishing marks), and a \"locations\" object "
+                f"of 2-5 recurring places. Reply as JSON: "
+                f'{{"plot": "...", "character_sheet": "...", "locations": {{"A": "one-sentence place description", ...}}, '
+                f'"scenes": [{{"prompt": "...", "location": "A", "continuity": "cut"}}, ...]}} '
                 f'with exactly {n} entries in "scenes". Remember: every scene prompt ends with an "Audio:" sentence.'
             )
             reply = ""
@@ -244,12 +254,26 @@ class AMD_MoviePlanner:
                         seed=llm_seed + attempt,
                     )
                     parsed = _extract_json(reply)
-                    got = [t for t in (_scene_text(s) for s in parsed.get("scenes", [])) if t]
+                    raw_scenes = parsed.get("scenes", [])
+                    got = [t for t in (_scene_text(s) for s in raw_scenes) if t]
                     if not got:
                         raise ValueError("LLM returned no scenes")
                     while len(got) < n:
                         got.append(got[-1])
                     scenes = got[:n]
+                    locs = parsed.get("locations", {}) or {}
+                    if isinstance(locs, dict):
+                        locations = {str(k): str(v).strip() for k, v in locs.items() if str(v).strip()}
+                    meta = []
+                    for s in raw_scenes:
+                        if isinstance(s, dict):
+                            meta.append({"location": str(s.get("location", "")).strip(),
+                                         "continuity": str(s.get("continuity", "cut")).strip().lower()})
+                        else:
+                            meta.append({"location": "", "continuity": "cut"})
+                    while len(meta) < n:
+                        meta.append({"location": "", "continuity": "cut"})
+                    scene_meta = meta[:n]
                     sheet = str(parsed.get("character_sheet", "")).strip()
                     plot = str(parsed.get("plot", "")).strip()
                     break
@@ -260,6 +284,9 @@ class AMD_MoviePlanner:
             if need_auto:
                 plot = plot or "(Ollama unavailable or disabled - used built-in act-structure fallback.)\n" + global_prompt
 
+        if not locations:
+            locations = {"A": f"the main setting of: {global_prompt[:180]}"}
+        loc_ids = list(locations.keys())
         final = []
         for i in range(n):
             core = overrides[i] if overrides[i] else scenes[i]
@@ -268,9 +295,16 @@ class AMD_MoviePlanner:
             full = f"{sheet} {core}".strip() if sheet and sheet.lower() not in core.lower() else core
             if style and style.lower() not in full.lower():
                 full = f"{full} {style}"
-            final.append({"index": i, "prompt": full, "core": core, "seconds": float(seconds_per_scene)})
+            m = scene_meta[i] if i < len(scene_meta) else {"location": "", "continuity": "cut"}
+            loc = m["location"] if m["location"] in locations else loc_ids[0]
+            cont = "flow" if (m["continuity"] == "flow" and i > 0) else "cut"
+            if cont == "flow":
+                loc = final[i - 1]["location"]  # a flow shot physically continues in the same place
+            final.append({"index": i, "prompt": full, "core": core, "seconds": float(seconds_per_scene),
+                          "location": loc, "continuity": cont})
 
-        plan = {"plot": plot, "sheet": sheet, "global_prompt": global_prompt, "scenes": final}
+        plan = {"plot": plot, "sheet": sheet, "global_prompt": global_prompt,
+                "locations": locations, "scenes": final}
         pretty = (f"PLOT\n{plot}\n\nCHARACTER SHEET\n{sheet}\n\n" if plot or sheet else "") + \
             "\n\n".join(f"[Scene {s['index'] + 1} - {s['seconds']:.1f}s]\n{s['core']}" for s in final)
         return {"ui": {"scene_texts": [s["core"] for s in final]},
@@ -294,7 +328,7 @@ class AMD_MovieRenderer:
                 "video_vae": ("VAE",),
                 "audio_vae": ("VAE",),
                 "scene_plan": ("STRING", {"forceInput": True}),
-                "mode": (["1) storyboard preview", "2) full movie (img2vid from storyboard)", "full movie (pure text2vid)"], {"default": "1) storyboard preview", "tooltip": "1) fast storyboard: one preview frame per scene (these become the movie's first frames). 2) full render where each scene starts from its approved storyboard frame (image-to-video). Or skip the storyboard entirely: pure text-to-video."}),
+                "mode": (["1) storyboard preview", "2) full movie (continuity)", "3) full movie (from storyboard frames)", "4) full movie (pure text2vid)"], {"default": "1) storyboard preview", "tooltip": "1) fast storyboard for approval. 2) CONTINUITY film: recurring locations are anchored on rendered location plates and 'flow' scenes physically continue from the previous scene's last frame - same rooms, carried action. 3) each scene starts from its approved storyboard frame. 4) pure text-to-video, every scene independent."}),
                 "width": ("INT", {"default": 1536, "min": 256, "max": 2048, "step": 32}),
                 "height": ("INT", {"default": 864, "min": 256, "max": 2048, "step": 32}),
                 "fps": ("INT", {"default": 24, "min": 8, "max": 60}),
@@ -305,7 +339,9 @@ class AMD_MovieRenderer:
                 "seed": ("INT", {"default": 42, "min": 0, "max": 2**63 - 1, "control_after_generate": False}),
                 "apply_stg": ("BOOLEAN", {"default": True, "tooltip": "Spatio-temporal guidance: better prompt adherence and detail at cfg 1 for a small speed cost."}),
                 "preview_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 32, "tooltip": "Width of the storyboard preview frames. 0 = match the final width (best: full-quality frames that also guide img2vid). Lower for faster, rougher boards."}),
-                "storyboard_strength": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "How strongly each scene sticks to its storyboard frame in img2vid mode. Lower = more natural/free, higher = more faithful to the exact frame."}),
+                "storyboard_strength": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Mode 3: how strongly each scene sticks to its storyboard frame."}),
+                "flow_strength": ("FLOAT", {"default": 0.9, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Continuity mode: how hard a 'flow' scene continues from the previous scene's last frame. High = seamless continuation."}),
+                "cut_strength": ("FLOAT", {"default": 0.6, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Continuity mode: how hard a 'cut' scene anchors on its location plate. Higher = same room stays identical, lower = freer reframing."}),
                 "filename_prefix": ("STRING", {"default": "auto_movie"}),
                 "output_dir": ("STRING", {"default": "", "tooltip": "Optional extra folder for the final movie. Always also saved to the ComfyUI output folder."}),
             },
@@ -317,18 +353,21 @@ class AMD_MovieRenderer:
     def render(self, model, clip, video_vae, audio_vae, scene_plan, mode, width, height,
                fps, steps, cfg, sampler, scheduler, seed, preview_size,
                storyboard_strength, filename_prefix, output_dir="",
-               upscale_model=None, use_storyboard_frames=True, apply_stg=True, **_legacy):
+               upscale_model=None, use_storyboard_frames=True, apply_stg=True,
+               flow_strength=0.9, cut_strength=0.6, **_legacy):
         m = str(mode).lower()
         is_preview = m.startswith("1") or "preview" in m or "editor" in m
-        want_i2v = (not is_preview) and ("text2vid" not in m) and bool(use_storyboard_frames)
+        want_chain = (not is_preview) and ("continuity" in m)
+        want_i2v = (not is_preview) and (not want_chain) and ("text2vid" not in m) and bool(use_storyboard_frames)
         return self._render(model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                             width, height, fps, steps, cfg, sampler, scheduler, seed,
                             preview_size, storyboard_strength, filename_prefix, output_dir,
-                            upscale_model, apply_stg)
+                            upscale_model, apply_stg, want_chain, flow_strength, cut_strength)
 
     def _render(self, model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                 width, height, fps, steps, cfg, sampler, scheduler, seed, preview_size,
-                storyboard_strength, filename_prefix, output_dir, upscale_model, apply_stg=True):
+                storyboard_strength, filename_prefix, output_dir, upscale_model, apply_stg=True,
+                want_chain=False, flow_strength=0.9, cut_strength=0.6):
         from comfy_execution.graph_utils import GraphBuilder
 
         plan = json.loads(scene_plan)
@@ -377,8 +416,8 @@ class AMD_MovieRenderer:
             g.node("PreviewImage", images=board.out(0))
             g.node("PreviewImage", images=frames_ref)
             msg = (f"STORYBOARD saved to: {board_dir}\\storyboard.png (+ scene frames + scenes.txt). "
-                   f"Approve it, then set mode='2) full movie (img2vid from storyboard)' and queue again - "
-                   f"each scene will START FROM these frames. (Keep seed and prompts unchanged.)")
+                   f"Approve it, then set mode='2) full movie (continuity)' and queue again. "
+                   f"(Keep seed and prompts unchanged.)")
             return {"result": (msg,), "expand": g.finalize()}
 
         # ---- full movie ----
@@ -390,14 +429,51 @@ class AMD_MovieRenderer:
 
         g = GraphBuilder()
         the_model = stg_model(g)
+
+        # continuity mode: render one anchor plate per recurring location, in-graph
+        plate_ref = {}
+        if want_chain:
+            locations = plan.get("locations") or {"A": f"the main setting of: {plan.get('global_prompt', '')[:180]}"}
+            style_tail = ""
+            if scenes:
+                prefix = f"{plan.get('sheet', '')} {scenes[0].get('core', '')}".strip()
+                if scenes[0]["prompt"].startswith(prefix):
+                    style_tail = scenes[0]["prompt"][len(prefix):].strip()
+            for li, (lid, desc) in enumerate(locations.items()):
+                ptxt = f"{desc}, empty of people, no people, cinematic still. {style_tail}".strip()
+                penc = g.node("CLIPTextEncode", clip=clip, text=ptxt)
+                pzero = g.node("ConditioningZeroOut", conditioning=penc.out(0))
+                pcond = g.node("LTXVConditioning", positive=penc.out(0), negative=pzero.out(0), frame_rate=float(fps))
+                plat = g.node("EmptyLTXVLatentVideo", width=width, height=height, length=1, batch_size=1)
+                pnoise = g.node("RandomNoise", noise_seed=(int(seed) + 9000 + li) & (2**63 - 1))
+                pks = g.node("KSamplerSelect", sampler_name=sampler)
+                psch = g.node("BasicScheduler", model=the_model, scheduler=scheduler, steps=int(steps), denoise=1.0)
+                pgd = g.node("CFGGuider", model=the_model, positive=pcond.out(0), negative=pcond.out(1), cfg=float(cfg))
+                psamp = g.node("SamplerCustomAdvanced", noise=pnoise.out(0), guider=pgd.out(0),
+                               sampler=pks.out(0), sigmas=psch.out(0), latent_image=plat.out(0))
+                pdec = g.node("VAEDecode", samples=psamp.out(0), vae=video_vae)
+                plate_ref[lid] = pdec.out(0)
+
         paths_ref = None
+        prev_last_ref = None
         for sc in scenes:
             i = int(sc["index"])
             frames = max(9, int(round((float(sc["seconds"]) * fps - 1) / 8.0)) * 8 + 1)
             enc = g.node("CLIPTextEncode", clip=clip, text=sc["prompt"])
             zero = g.node("ConditioningZeroOut", conditioning=enc.out(0))
             cond = g.node("LTXVConditioning", positive=enc.out(0), negative=zero.out(0), frame_rate=float(fps))
-            if use_i2v:
+            if want_chain:
+                loc = sc.get("location") or next(iter(plate_ref))
+                if loc not in plate_ref:
+                    loc = next(iter(plate_ref))
+                is_flow = sc.get("continuity") == "flow" and prev_last_ref is not None
+                guide_ref = prev_last_ref if is_flow else plate_ref[loc]
+                strength = float(flow_strength) if is_flow else float(cut_strength)
+                i2v = g.node("LTXVImgToVideo", positive=cond.out(0), negative=cond.out(1), vae=video_vae,
+                             image=guide_ref, width=width, height=height, length=frames,
+                             batch_size=1, strength=strength)
+                pos_ref, neg_ref, vlat_ref = i2v.out(0), i2v.out(1), i2v.out(2)
+            elif use_i2v:
                 img = g.node("AMD_LoadFrame", path=frame_files[i])
                 img_ref = img.out(0)
                 if upscale_model is not None:
@@ -418,6 +494,10 @@ class AMD_MovieRenderer:
             sep = g.node("LTXVSeparateAVLatent", av_latent=samp.out(0))
             vdec = g.node("VAEDecode", samples=sep.out(0), vae=video_vae)
             adec = g.node("LTXVAudioVAEDecode", samples=sep.out(1), audio_vae=audio_vae)
+            if want_chain:
+                lf = g.node("AMD_LastFrame", images=vdec.out(0))
+                prev_last_ref = lf.out(0)
+                plate_ref[loc] = lf.out(0)  # evolving plate: the location now looks like this
             wr = g.node("AMD_SceneWriter", images=vdec.out(0), audio=adec.out(0),
                         fps=fps, scene_index=i,
                         run_id=run_id, out_rel=os.path.join(proj_rel, "takes", run_id))
@@ -430,6 +510,20 @@ class AMD_MovieRenderer:
                     plot_text=script_text, run_id=run_id, output_dir=output_dir,
                     proj_rel=proj_rel)
         return {"result": (st.out(0),), "expand": g.finalize()}
+
+
+class AMD_LastFrame:
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("last_frame",)
+    FUNCTION = "take"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"images": ("IMAGE",)}}
+
+    def take(self, images):
+        return (images[-1:],)
 
 
 class AMD_LoadFrame:
@@ -726,6 +820,7 @@ WEB_DIRECTORY = "./js"
 NODE_CLASS_MAPPINGS = {
     "AMD_MoviePlanner": AMD_MoviePlanner,
     "AMD_MovieRenderer": AMD_MovieRenderer,
+    "AMD_LastFrame": AMD_LastFrame,
     "AMD_LoadFrame": AMD_LoadFrame,
     "AMD_SceneWriter": AMD_SceneWriter,
     "AMD_PathJoin": AMD_PathJoin,
@@ -736,6 +831,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AMD_MoviePlanner": "🎬 Movie Planner (Ollama)",
     "AMD_MovieRenderer": "🎬 Movie Renderer (LTX scenes)",
+    "AMD_LastFrame": "🎬 Last Frame",
     "AMD_LoadFrame": "🎬 Load Storyboard Frame",
     "AMD_SceneWriter": "🎬 Scene Writer",
     "AMD_PathJoin": "🎬 Path Join",
