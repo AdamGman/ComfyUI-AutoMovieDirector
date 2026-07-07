@@ -1,5 +1,5 @@
-﻿{
-  "id": "auto-movie-director-hq",
+{
+  "id": "auto-movie-director",
   "revision": 0,
   "last_node_id": 11,
   "last_link_id": 8,
@@ -22,7 +22,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# \ud83c\udfac AUTO MOVIE DIRECTOR\n\n## \u2460 WRITE \u2014 type your movie idea in the Planner. Set scenes & seconds.\n\n## \u2461 PREVIEW \u2014 mode = `editor preview` \u2192 press Queue. Storyboard appears on the Renderer + saved to `output/auto_movie/`.\n\n## \u2462 APPROVE \u2014 happy? Touch nothing. Not happy? Edit idea/overrides, Queue again.\n\n## \u2463 RENDER \u2014 flip mode to `full movie` \u2192 Queue. Scenes start from your approved frames, get motion + sound, stitched into one MP4.\n"
+        "# 🎬 AUTO MOVIE DIRECTOR\n\n## 1 — WRITE: type your movie idea in the Planner. Set scenes & seconds.\n\n## 2 — PREVIEW: mode = `1) storyboard preview` → press Queue. Storyboard appears on the Renderer + saved to `output/auto_movie/`.\n\n## 3 — APPROVE: happy? Touch nothing. Not happy? Edit idea/overrides, Queue again.\n\n## 4 — RENDER: flip mode to `2) full movie` → Queue. Scenes start from your approved frames, get motion + sound, stitched into one MP4.\n"
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -270,15 +270,15 @@
         "Node name for S&R": "AMD_MoviePlanner"
       },
       "widgets_values": [
-        "A small rusty robot tends a rooftop garden in a rainy cyberpunk city, discovers a single glowing blue flower, protects it through a violent storm, and at dawn the whole rooftop blooms.",
+        "A small boxy rust-orange robot rolling on two black tank treads, with one big round glowing cyan eye in a dome head and two thin piston arms, tends a rooftop garden in a rainy cyberpunk city. It discovers a single glowing blue flower, shields it through a night storm, and at dawn the whole rooftop blooms.",
         12,
         5.0,
-        "cinematic, photorealistic, moody volumetric light, shallow depth of field, film grain",
+        "photorealistic, moody volumetric light, shallow depth of field, rich detail, full frame composition",
         true,
         "qwen3.6:latest",
         "http://127.0.0.1:11434",
         "",
-        11
+        21
       ]
     },
     {
@@ -357,7 +357,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# \u2b05 THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### fast frames = your movie's first frames\n\n## 2) full movie (img2vid)\n### every scene STARTS from its approved storyboard frame\n\n## full movie (pure text2vid)\n### skip the storyboard, prompt-only scenes\n\n# Preview \u2192 approve \u2192 flip to 2) \u2192 Queue"
+        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### fast frames = your movie's first frames\n\n## 2) full movie (img2vid)\n### every scene STARTS from its approved storyboard frame\n\n## full movie (pure text2vid)\n### skip the storyboard, prompt-only scenes\n\n# Preview → approve → flip to 2) → Queue"
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -465,7 +465,7 @@
   ],
   "groups": [
     {
-      "title": "\ud83c\udf9b  MODELS \u2014 set once",
+      "title": "🎛  MODELS — set once",
       "bounding": [
         20,
         -10,
@@ -478,7 +478,7 @@
       "id": 1
     },
     {
-      "title": "\u270d\ufe0f  \u2460 WRITE YOUR MOVIE",
+      "title": "✍  1 · WRITE YOUR MOVIE",
       "bounding": [
         500,
         -10,
@@ -491,7 +491,7 @@
       "id": 2
     },
     {
-      "title": "\ud83c\udfac  \u2461 DIRECT \u2192 RENDER (mode switch!)",
+      "title": "🎬  2 · DIRECT → RENDER (mode switch!)",
       "bounding": [
         1040,
         -10,
@@ -504,7 +504,7 @@
       "id": 3
     },
     {
-      "title": "\ud83d\udccb  SCRIPT & HELP",
+      "title": "📋  SCRIPT & HELP",
       "bounding": [
         1560,
         -10,

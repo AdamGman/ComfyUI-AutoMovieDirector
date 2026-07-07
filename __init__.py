@@ -41,7 +41,18 @@ _PLANNER_SYSTEM = (
     "tin, distant thunder rolls, servo motors whirring softly.'). The model generates audio from this.\n"
     "5. Each scene prompt is 50-90 words, concrete and visual. No numbering, no markdown, no camera jargon "
     "the model can't see.\n"
-    "6. Do NOT restate the character sheet inside scene prompts — it is prepended automatically."
+    "6. Do NOT restate the character sheet inside scene prompts — it is prepended automatically.\n"
+    "7. CHARACTER SHEET must pin down COUNTABLE anatomy so the subject looks identical in every scene: body "
+    "plan (biped/quadruped/wheeled/treaded...), exact number of limbs, head shape, number/color of eyes or "
+    "lenses, torso shape, size next to a familiar object, and 2-3 unmistakable marks. If the movie brief "
+    "already describes the subject physically, the character sheet MUST repeat those exact physical facts "
+    "word-for-word — never contradict, replace, or omit them.\n"
+    "8. IMAGE HYGIENE: full-bleed frames only — never letterboxing, black bars, borders, picture frames, "
+    "windows framing the subject, split screens, or text overlays. The word 'lightning' (any form) is "
+    "FORBIDDEN, as are 'sparks', 'glitter', 'film grain', 'flickering': storms read as sheets of streaking "
+    "rain, wet reflections, and a soft glow inside the clouds. Rain is always streaks in motion, never specks.\n"
+    "9. Verbs must match the subject's stated anatomy: a robot on treads ROLLS or SITS PARKED — it never "
+    "stands, walks, kneels, or grows legs. Never give the subject body parts the character sheet doesn't list."
 )
 
 

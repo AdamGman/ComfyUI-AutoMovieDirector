@@ -96,6 +96,7 @@ output/
 
 ## Notes
 
+- **Character consistency**: describe your hero *physically* in the idea — body plan, limb count, eye color, size ("a boxy rust-orange robot on two black tank treads with one big cyan eye..."). The planner repeats those exact facts in every scene prompt, which is what keeps the same character across cuts.
 - A 5-second 1536×864 scene ≈ 2 minutes on an RTX 4090; the storyboard pass is a few seconds per scene.
 - Keep **seed and prompts unchanged** between preview and render — that's how approved frames are matched.
 - Long films: decoded frames stay in RAM during the run — 12+ scenes at high res wants 32 GB+ free.
