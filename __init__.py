@@ -1,5 +1,6 @@
-"""Auto Movie Director — plan a movie with an LLM, preview it as a storyboard,
-then render every scene with LTX 2.3 (video + audio) and stitch one finished MP4.
+"""Auto Movie Director by AdamGman — plan a movie with an LLM, preview it as a
+storyboard, then render every scene with LTX 2.3 (video + audio) and stitch one
+finished MP4. https://github.com/AdamGman/ComfyUI-AutoMovieDirector
 
 Workflow: queue once in 'editor preview' (fast, low-res single frame per scene ->
 storyboard saved to the output folder), approve, flip mode to 'full movie', queue
@@ -145,7 +146,7 @@ def _plan_hash(scenes, seed):
 
 
 class AMD_MoviePlanner:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("scene_plan", "plot_text")
     FUNCTION = "plan"
@@ -256,7 +257,7 @@ class AMD_MoviePlanner:
 
 
 class AMD_MovieRenderer:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("movie_path",)
     FUNCTION = "render"
@@ -394,7 +395,7 @@ class AMD_MovieRenderer:
 
 
 class AMD_LoadFrame:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("image",)
     FUNCTION = "load"
@@ -414,7 +415,7 @@ class AMD_LoadFrame:
 
 
 class AMD_SceneWriter:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("scene_path",)
     FUNCTION = "write"
@@ -446,7 +447,7 @@ class AMD_SceneWriter:
 
 
 class AMD_PathJoin:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("paths",)
     FUNCTION = "join"
@@ -460,7 +461,7 @@ class AMD_PathJoin:
 
 
 class AMD_Stitcher:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("movie_path",)
     FUNCTION = "stitch"
@@ -527,7 +528,7 @@ class AMD_Stitcher:
 
 
 class AMD_Storyboard:
-    CATEGORY = "AutoMovieDirector"
+    CATEGORY = "AdamGman/🎬 Auto Movie Director"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("storyboard",)
     FUNCTION = "compose"
@@ -543,10 +544,42 @@ class AMD_Storyboard:
             }
         }
 
+    @staticmethod
+    def _font(size, bold=False):
+        from PIL import ImageFont
+        for name in (("segoeuib.ttf",) if bold else ("segoeui.ttf",)) + ("arialbd.ttf" if bold else "arial.ttf", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"):
+            try:
+                return ImageFont.truetype(name, size)
+            except Exception:
+                continue
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            return ImageFont.load_default()
+
+    @staticmethod
+    def _wrap(draw, text, font, max_w, max_lines):
+        words = text.split()
+        lines, cur = [], ""
+        for w in words:
+            trial = (cur + " " + w).strip()
+            if draw.textlength(trial, font=font) <= max_w:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+                if len(lines) == max_lines:
+                    break
+        if cur and len(lines) < max_lines:
+            lines.append(cur)
+        if len(lines) == max_lines and draw.textlength(" ".join(words), font=font) > max_w * max_lines * 0.98:
+            lines[-1] = lines[-1][:max(0, len(lines[-1]) - 1)] + "…"
+        return lines
+
     def compose(self, images, scene_plan, columns, save_dir=""):
         import numpy as np
         import torch
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
 
         plan = json.loads(scene_plan)
         scenes = plan["scenes"]
@@ -554,44 +587,59 @@ class AMD_Storyboard:
         cols = max(1, min(int(columns), n))
         rows = math.ceil(n / cols)
 
-        tile_w = 448
+        tile_w = 460
         src_h, src_w = images.shape[1], images.shape[2]
         tile_h = int(round(tile_w * src_h / src_w))
-        bar_h = 96
-        margin = 14
-        board_w = margin + cols * (tile_w + margin)
-        board_h = margin + rows * (tile_h + bar_h + margin)
-        board = Image.new("RGB", (board_w, board_h), (22, 22, 27))
+        bar_h = 92
+        gap = 18
+        header_h = 96
+        BG, CARD, ACCENT = (16, 16, 20), (33, 33, 41), (255, 165, 44)
+        board_w = gap + cols * (tile_w + gap)
+        board_h = header_h + gap + rows * (tile_h + bar_h + gap)
+        board = Image.new("RGB", (board_w, board_h), BG)
         draw = ImageDraw.Draw(board)
-        try:
-            font_big = ImageFont.load_default(size=17)
-            font_small = ImageFont.load_default(size=13)
-        except TypeError:
-            font_big = font_small = ImageFont.load_default()
+
+        f_title = self._font(30, bold=True)
+        f_sub = self._font(15)
+        f_chip = self._font(16, bold=True)
+        f_time = self._font(14)
+        f_body = self._font(14)
+
+        total = sum(float(s.get("seconds", 0)) for s in scenes)
+        title = (plan.get("global_prompt") or "Untitled").strip()
+        title = title[:70] + ("…" if len(title) > 70 else "")
+        draw.rectangle([0, 0, board_w, header_h], fill=(22, 22, 28))
+        draw.rectangle([0, header_h - 3, board_w, header_h], fill=ACCENT)
+        draw.text((gap + 2, 16), title, fill=(240, 240, 245), font=f_title)
+        draw.text((gap + 2, 58), f"STORYBOARD   ·   {n} scenes   ·   {total:.0f}s total   ·   approve, then render the full movie",
+                  fill=(150, 150, 162), font=f_sub)
 
         pil_frames = []
+        t_cursor = 0.0
         for i in range(n):
             arr = (images[i].cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
             full = Image.fromarray(arr)
             pil_frames.append(full)
             tile = full.resize((tile_w, tile_h), Image.LANCZOS)
-            cx = margin + (i % cols) * (tile_w + margin)
-            cy = margin + (i // cols) * (tile_h + bar_h + margin)
-            board.paste(tile, (cx, cy))
+            cx = gap + (i % cols) * (tile_w + gap)
+            cy = header_h + gap + (i // cols) * (tile_h + bar_h + gap)
             sc = scenes[i] if i < len(scenes) else {"prompt": "", "core": "", "seconds": 0}
+            secs = float(sc.get("seconds", 0))
+            draw.rectangle([cx - 1, cy - 1, cx + tile_w + 1, cy + tile_h + bar_h + 1], outline=(58, 58, 70), width=1)
+            board.paste(tile, (cx, cy))
+            draw.rectangle([cx, cy + tile_h, cx + tile_w, cy + tile_h + bar_h], fill=CARD)
+            chip = f"SC {i + 1:02d}"
+            chip_w = draw.textlength(chip, font=f_chip) + 16
+            draw.rounded_rectangle([cx + 10, cy + tile_h + 10, cx + 10 + chip_w, cy + tile_h + 34], radius=5, fill=ACCENT)
+            draw.text((cx + 18, cy + tile_h + 13), chip, fill=(20, 20, 24), font=f_chip)
+            tc = f"{int(t_cursor // 60):02d}:{t_cursor % 60:04.1f} – {int((t_cursor + secs) // 60):02d}:{(t_cursor + secs) % 60:04.1f}"
+            draw.text((cx + tile_w - draw.textlength(tc, font=f_time) - 12, cy + tile_h + 15), tc,
+                      fill=(150, 150, 162), font=f_time)
             text = str(sc.get("core") or sc.get("prompt") or "").replace("\n", " ")
-            draw.rectangle([cx, cy + tile_h, cx + tile_w, cy + tile_h + bar_h], fill=(38, 38, 46))
-            draw.rectangle([cx, cy + tile_h, cx + tile_w, cy + tile_h + 3], fill=(255, 170, 40))
-            draw.text((cx + 10, cy + tile_h + 8), f"SCENE {i + 1}  |  {float(sc.get('seconds', 0)):.1f}s",
-                      fill=(255, 205, 110), font=font_big)
-            for li in range(3):
-                seg = text[li * 60:(li + 1) * 60]
-                if not seg:
-                    break
-                if li == 2 and len(text) > 180:
-                    seg = seg[:57] + "..."
-                draw.text((cx + 10, cy + tile_h + 33 + li * 19), seg,
-                          fill=(210, 210, 218) if li == 0 else (170, 170, 180), font=font_small)
+            for li, line in enumerate(self._wrap(draw, text, f_body, tile_w - 24, 2)):
+                draw.text((cx + 12, cy + tile_h + 42 + li * 20), line,
+                          fill=(214, 214, 224) if li == 0 else (168, 168, 180), font=f_body)
+            t_cursor += secs
 
         if save_dir.strip():
             try:

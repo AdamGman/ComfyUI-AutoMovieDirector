@@ -1,30 +1,52 @@
-# 🎬 ComfyUI Auto Movie Director
+<div align="center">
 
-**Type a movie idea. Get a finished short film — plot, scenes, camera work, sound, and a stitched MP4 — rendered locally with LTX 2.3.**
+# 🎬 Auto Movie Director
 
-An LLM (via [Ollama](https://ollama.com)) acts as your screenwriter and director: it turns one prompt into a three-act film treatment with per-scene shot types, continuity, and sound design. Every scene renders as video **with audio**, and everything is automatically stitched into one high-quality MP4 — with a storyboard approval step in between, movie-studio style.
+**Type a movie idea. Get a finished short film.**
 
-![storyboard example](docs/storyboard_example.png)
+Plot · storyboard approval · every scene rendered with video **and** sound · one stitched MP4 — all local.
 
-## How it works
+[![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom_nodes-blue)](https://github.com/comfyanonymous/ComfyUI)
+[![LTX 2.3](https://img.shields.io/badge/LTX-2.3_video+audio-purple)](https://github.com/Lightricks/ComfyUI-LTXVideo)
+[![Ollama](https://img.shields.io/badge/Ollama-any_model-green)](https://ollama.com)
 
+![demo](docs/demo.gif)
+
+*fully automatic — one prompt wrote, storyboarded, filmed, scored, and edited this*
+
+<img src="docs/still1.jpg" width="32%"/> <img src="docs/still2.jpg" width="32%"/> <img src="docs/still3.jpg" width="32%"/>
+
+</div>
+
+---
+
+## What it does
+
+You give it **one idea** and pick **any number of scenes (1–24), any seconds per scene, any resolution, any frame rate**. A local LLM (via Ollama — **any model you name, auto-downloaded** if missing) becomes your screenwriter: three-act structure, a reusable character sheet for cross-scene consistency, an explicit shot type and camera move for every scene, and a concrete **`Audio:` sound-design line per scene** that LTX turns into an actual soundtrack.
+
+Then the Renderer expands into one full LTX 2.3 render chain **per scene** — video *and* audio — writes every scene to disk, and ffmpeg-stitches the finished film (H.264 CRF 16 + AAC) that previews right on the node.
+
+```mermaid
+flowchart LR
+    A["💡 your idea"] --> B["🧠 Movie Planner<br/>(any Ollama LLM)"]
+    B --> C["📋 storyboard preview<br/>fast frame per scene"]
+    C -->|approve| D["🎥 full movie<br/>img2vid from your approved frames"]
+    C -.->|skip| E["🎥 full movie<br/>pure text2vid"]
+    D --> F["🍿 one MP4<br/>video + audio, stitched"]
+    E --> F
 ```
-your idea ──► 🎬 Movie Planner (Ollama LLM)          ──► plot + character sheet + N scene prompts
-                    │                                        (three-act structure, shot grammar,
-                    ▼                                         "Audio:" sound design per scene)
-              🎬 Movie Renderer (LTX 2.3)
-                    │
-        mode 1) storyboard preview  ──► fast frame per scene + storyboard grid
-        mode 2) full movie (img2vid) ──► each scene STARTS from its approved
-                    │                    storyboard frame, upscaled + animated + audio
-                    ▼
-              scene_00.mp4 … scene_NN.mp4 ──► ffmpeg stitch ──► your_movie.mp4 🍿
-```
 
-1. **Write** — type your movie idea, pick the number of scenes and seconds per scene. Optional: type a prompt for any individual scene (empty boxes are written by the AI).
-2. **Preview** — queue in `1) storyboard preview`: one fast frame per scene, laid out as a storyboard (saved to `output/auto_movie/`), plus the full script as text.
-3. **Approve & render** — flip mode to `2) full movie (img2vid from storyboard)` and queue: every scene starts from the exact frame you approved (sharpened through the LTX spatial upscaler), gets motion and generated audio, and the final MP4 previews right on the node.
-4. Don't want the storyboard step? `full movie (pure text2vid)` goes straight to render.
+## The studio flow
+
+| Step | What you do | What happens |
+|---|---|---|
+| **① Write** | Type the idea. Set scene count & seconds. Optionally type any individual scene yourself — per-scene boxes appear on the node; empty ones are written by the AI. | LLM writes plot + character sheet + N cinematic scene prompts with sound design. |
+| **② Preview** | mode = `1) storyboard preview` → Queue | One fast frame per scene + a titled storyboard with timecodes, saved to `output/auto_movie/`. Thumbnails appear next to each scene box. |
+| **③ Approve** | Like it? Touch nothing. Don't? Edit and re-queue. | Same seed + prompts = the exact frames you approved are locked. |
+| **④ Render** | mode = `2) full movie (img2vid from storyboard)` → Queue | Each scene **starts from its approved frame** (sharpened through the LTX spatial upscaler), gets motion + audio, stitched to one MP4. |
+
+No storyboard wanted? `full movie (pure text2vid)` goes straight to film.
 
 ## Install
 
@@ -33,50 +55,56 @@ cd ComfyUI/custom_nodes
 git clone https://github.com/AdamGman/ComfyUI-AutoMovieDirector
 ```
 
-Then restart ComfyUI and open one of the workflows in `example_workflows/`.
+Restart ComfyUI, then open **`example_workflows/Auto Movie Director.json`** — everything is pre-wired; just point the loaders at your LTX models.
 
-### Requirements
+<details>
+<summary><b>Requirements</b></summary>
 
 | What | Why |
 |---|---|
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 0.27+ | node expansion API |
-| [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) | LTX audio/video nodes |
-| [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | only if you use GGUF-quantized LTX models |
-| [Ollama](https://ollama.com) running locally | the screenwriter LLM |
-| `imageio-ffmpeg` (pulled in by VideoHelperSuite, or `pip install imageio-ffmpeg`) | final stitching |
+| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 0.27+ | node-expansion API |
+| [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) | LTX video+audio nodes |
+| [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | only for GGUF-quantized LTX transformers |
+| [Ollama](https://ollama.com) | the screenwriter LLM (offline fallback built in) |
+| `imageio-ffmpeg` | stitching (`pip install imageio-ffmpeg` if you don't have VideoHelperSuite) |
 
-**LTX 2.3 models** (place in your usual model folders): the LTX 2.3 transformer (any variant — fp8, or GGUF + distilled LoRA), Gemma text encoder + LTX text projection, LTX video VAE + audio VAE, and the LTX spatial upscaler (recommended, used to sharpen storyboard frames before they guide the full render).
+**LTX 2.3 models** in your model folders: transformer (fp8 **or** GGUF + distilled LoRA), Gemma text encoder + LTX text projection, video VAE + audio VAE, and the LTX spatial upscaler (recommended — it sharpens storyboard frames before they guide the render).
 
-### The LLM — any Ollama model works
+</details>
 
-Set `ollama_model` on the Planner to **any** model name from the [Ollama library](https://ollama.com/library) — if it isn't installed yet, **it downloads automatically on first use**. Recommended: `qwen3.6:latest` (default) for the best scripts, `llama3.2:3b` if you want something small and fast. If Ollama isn't running at all, a built-in act-structure fallback still produces a working movie.
+## Everything is a dial
 
-## The nodes
-
-| Node | What it does |
-|---|---|
-| 🎬 **Movie Planner (Ollama)** | idea → plot, reusable character sheet, N scene prompts (shot type + camera + continuity + `Audio:` sound design each). Per-scene override boxes with storyboard thumbnails appear right on the node. |
-| 🎬 **Movie Renderer (LTX scenes)** | expands at runtime into one LTX render chain per scene. Modes: storyboard preview / full movie from storyboard (img2vid) / pure text2vid. All quality settings: width, height, fps, steps, cfg, sampler, scheduler, seed, preview size, storyboard strength. |
-| 🎬 **Movie Stitcher** | ffmpeg-concats all scenes into one MP4 (H.264 CRF 16 + AAC), previews it on the node, optional extra `output_dir`. |
-| 🎬 Storyboard / Scene Writer / Load Frame / Path Join | internals used by the renderer's expansion. |
+- **Scenes**: 1–24, each with its own optional prompt box
+- **Length**: seconds per scene (frame counts snap to what LTX wants automatically)
+- **Resolution**: anything /32 up to 2048 — 1536×864 is the 24 GB sweet spot
+- **Frame rate**: 8–60 fps (24 = cinema)
+- **Sampler / scheduler / steps / cfg / seed**: full control
+- **`preview_size`**: how fast/rough the storyboard pass is
+- **`storyboard_strength`**: how hard scenes stick to approved frames (lower = freer motion)
+- **`ollama_model`**: any model from the [Ollama library](https://ollama.com/library) — auto-pulled on first use (default `qwen3.6:latest`; `llama3.2:3b` works if you're tight on VRAM)
+- **`output_dir`**: optional extra folder for the final film
 
 ## Outputs
 
 ```
 output/
-├── your_movie_20260706_193834.mp4      ← the finished film (video + audio)
+├── auto_movie_<timestamp>.mp4        ← 🍿 the film (video + audio)
 └── auto_movie/
-    ├── storyboard_<id>/                ← storyboard.png, scene_XX.png, scenes.txt
-    └── <run_id>/                       ← per-scene MP4s + plot.txt
+    ├── storyboard_<id>/              ← storyboard.png · scene_XX.png · scenes.txt
+    └── <run_id>/                     ← per-scene MP4s · plot.txt
 ```
 
-## Tips
+## Notes
 
-- **Keep seed + prompts unchanged** between storyboard and full render — that's how the frames are matched.
-- `storyboard_strength` (default 0.8): higher = the scene sticks harder to the approved frame; lower = more natural motion and texture.
-- 1536×864 @ 24 fps is the sweet spot on a 24 GB GPU; a 5-second scene renders in ~2 minutes on an RTX 4090.
-- Big scene counts: RAM is the limit (decoded frames are cached during the run) — 12 scenes at 1536×864 wants ~32 GB+ free RAM.
+- A 5-second 1536×864 scene ≈ 2 minutes on an RTX 4090; the storyboard pass is a few seconds per scene.
+- Keep **seed and prompts unchanged** between preview and render — that's how approved frames are matched.
+- Long films: decoded frames stay in RAM during the run — 12+ scenes at high res wants 32 GB+ free.
+- Security policy: [SECURITY.md](SECURITY.md)
 
-## License
+---
 
-MIT
+<div align="center">
+
+**by [AdamGman](https://github.com/AdamGman)** · MIT
+
+</div>

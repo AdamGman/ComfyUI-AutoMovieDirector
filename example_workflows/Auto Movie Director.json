@@ -1,5 +1,5 @@
 ﻿{
-  "id": "auto-movie-director",
+  "id": "auto-movie-director-hq",
   "revision": 0,
   "last_node_id": 11,
   "last_link_id": 8,
@@ -270,8 +270,8 @@
         "Node name for S&R": "AMD_MoviePlanner"
       },
       "widgets_values": [
-        "A lone lighthouse keeper discovers a tiny glowing whale stranded in a tide pool and helps it return to the sea during a storm.",
-        4,
+        "A small rusty robot tends a rooftop garden in a rainy cyberpunk city, discovers a single glowing blue flower, protects it through a violent storm, and at dawn the whole rooftop blooms.",
+        12,
         5.0,
         "cinematic, photorealistic, moody volumetric light, shallow depth of field, film grain",
         true,
