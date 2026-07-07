@@ -4,7 +4,7 @@
 
 If you find a way to make these nodes do something destructive or leak data outside their output folders, please open a **private security advisory**:
 
-https://github.com/AdamGman/ComfyUI-AutoMovieDirector/security/advisories/new
+https://github.com/AdamGman/ComfyUI-GmanNodes/security/advisories/new
 
 Don't open a public issue for exploitable cases — ComfyUI workflows are shared and imported constantly, and a public write-up makes every user running this pack immediately attackable through a malicious workflow file.
 

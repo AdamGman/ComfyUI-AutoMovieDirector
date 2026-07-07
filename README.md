@@ -1,10 +1,11 @@
 <div align="center">
 
-# 🎬 Auto Movie Director
+# 🎬 GmanNodes — Auto Movie Director
 
 ### A ComfyUI **custom node pack**: type a movie idea, get a finished short film — with sound.
 
-Seven nodes (planner · renderer · stitcher · storyboard + helpers) you can wire any way you like.
+**GmanNodes** is the pack · **Auto Movie Director** is its flagship suite: seven nodes
+(planner · renderer · stitcher · storyboard + helpers) you can wire any way you like.
 The included workflow is just the recommended wiring — **the nodes are the product.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
@@ -42,7 +43,7 @@ Per-scene prompt boxes live on the Planner node — type into any scene to overr
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/AdamGman/ComfyUI-AutoMovieDirector
+git clone https://github.com/AdamGman/ComfyUI-GmanNodes
 ```
 
 Restart ComfyUI → open **`example_workflows/Auto Movie Director.json`** → type your idea → Queue.
@@ -68,13 +69,13 @@ That's the storyboard. Approve it, set mode to `2) full movie`, Queue again. �
 
 ## The nodes you get
 
-All under the **AdamGman → 🎬 Auto Movie Director** category in the node menu:
+All under the **GmanNodes → 🎬 Auto Movie Director** category in the node menu (search "gman"):
 
 | Node | Job |
 |---|---|
-| 🎬 **Movie Planner (Ollama)** | idea → plot, character sheet, per-scene prompts with shot grammar + sound design. Grows per-scene override boxes with live thumbnails right on the node. |
-| 🎬 **Movie Renderer (LTX scenes)** | one node that expands into a full LTX render chain per scene at runtime — storyboard / img2vid / text2vid modes, every quality dial exposed. |
-| 🎬 **Movie Stitcher** | ffmpeg-concats the scenes into one MP4 (H.264 + AAC), previews it on the node. |
+| 🎬 **Ollama Movie Planner (GmanNodes)** | idea → plot, character sheet, per-scene prompts with shot grammar + sound design. Grows per-scene override boxes with live thumbnails right on the node. |
+| 🎬 **LTX Movie Renderer (GmanNodes)** | one node that expands into a full LTX render chain per scene at runtime — storyboard / img2vid / text2vid modes, every quality dial exposed. |
+| 🎬 **Movie Stitcher (GmanNodes)** | ffmpeg-concats the scenes into one MP4 (H.264 + AAC), previews it on the node. |
 | 🎬 Storyboard · Scene Writer · Load Frame · Path Join | the renderer's building blocks — usable standalone in your own graphs. |
 
 ## What the AI director actually does

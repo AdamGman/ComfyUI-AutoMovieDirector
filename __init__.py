@@ -1,6 +1,6 @@
-"""Auto Movie Director by AdamGman — plan a movie with an LLM, preview it as a
-storyboard, then render every scene with LTX 2.3 (video + audio) and stitch one
-finished MP4. https://github.com/AdamGman/ComfyUI-AutoMovieDirector
+"""GmanNodes by AdamGman — Auto Movie Director: plan a movie with an LLM, preview
+it as a storyboard, then render every scene with LTX 2.3 (video + audio) and stitch
+one finished MP4. https://github.com/AdamGman/ComfyUI-GmanNodes
 
 Workflow: queue once in 'editor preview' (fast, low-res single frame per scene ->
 storyboard saved to the output folder), approve, flip mode to 'full movie', queue
@@ -87,7 +87,7 @@ def _ollama_chat(url, model, messages, seed=0, images_b64=None, timeout=600):
             return json.load(r)
 
     def _pull(name):
-        print(f"[AutoMovieDirector] model '{name}' not installed - asking Ollama to download it (this can take a while)...")
+        print(f"[GmanNodes] model '{name}' not installed - asking Ollama to download it (this can take a while)...")
         preq = urllib.request.Request(
             url.rstrip("/") + "/api/pull",
             data=json.dumps({"name": name, "stream": False}).encode("utf-8"),
@@ -95,7 +95,7 @@ def _ollama_chat(url, model, messages, seed=0, images_b64=None, timeout=600):
         )
         with urllib.request.urlopen(preq, timeout=3600) as r:
             status = json.load(r).get("status", "")
-        print(f"[AutoMovieDirector] pull '{name}': {status or 'done'}")
+        print(f"[GmanNodes] pull '{name}': {status or 'done'}")
 
     try:
         data = _post(body)
@@ -171,7 +171,7 @@ def _project_rel(plan, phash):
 
 
 class AMD_MoviePlanner:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("scene_plan", "plot_text")
     FUNCTION = "plan"
@@ -214,7 +214,7 @@ class AMD_MoviePlanner:
             )
             return _extract_json(reply).get("caption", "")
         except Exception as e:
-            print(f"[AutoMovieDirector] image caption skipped: {e}")
+            print(f"[GmanNodes] image caption skipped: {e}")
             return ""
 
     def plan(self, global_prompt, num_scenes, seconds_per_scene, style, use_ollama,
@@ -278,7 +278,7 @@ class AMD_MoviePlanner:
                     plot = str(parsed.get("plot", "")).strip()
                     break
                 except Exception as e:
-                    print(f"[AutoMovieDirector] Ollama planning attempt {attempt + 1} failed: {e} | reply head: {reply[:220]!r}")
+                    print(f"[GmanNodes] Ollama planning attempt {attempt + 1} failed: {e} | reply head: {reply[:220]!r}")
         if scenes is None:
             scenes = _fallback_scenes(global_prompt, style, n)
             if need_auto:
@@ -312,7 +312,7 @@ class AMD_MoviePlanner:
 
 
 class AMD_MovieRenderer:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("movie_path",)
     FUNCTION = "render"
@@ -464,7 +464,7 @@ class AMD_MovieRenderer:
         frame_files = [os.path.join(board_dir, f"scene_{int(sc['index']):02d}.png") for sc in scenes]
         use_i2v = want_i2v and all(os.path.isfile(p) for p in frame_files)
         if want_i2v and not use_i2v:
-            print(f"[AutoMovieDirector] no matching storyboard frames for plan {phash} - rendering text-to-video. "
+            print(f"[GmanNodes] no matching storyboard frames for plan {phash} - rendering text-to-video. "
                   f"(Run '1) storyboard preview' first with the same prompts+seed to lock compositions.)")
 
         g = GraphBuilder()
@@ -532,7 +532,7 @@ class AMD_MovieRenderer:
 
 
 class AMD_LastFrame:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("last_frame",)
     FUNCTION = "take"
@@ -546,7 +546,7 @@ class AMD_LastFrame:
 
 
 class AMD_LoadFrame:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("image",)
     FUNCTION = "load"
@@ -566,7 +566,7 @@ class AMD_LoadFrame:
 
 
 class AMD_SceneWriter:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("scene_path",)
     FUNCTION = "write"
@@ -598,7 +598,7 @@ class AMD_SceneWriter:
             Types.VideoComponents(images=images, audio=audio, frame_rate=Fraction(fps))
         )
         video.save_to(path, format=Types.VideoContainer.MP4, codec=Types.VideoCodec.H264)
-        print(f"[AutoMovieDirector] wrote {path}")
+        print(f"[GmanNodes] wrote {path}")
 
         # emit a mid-frame thumbnail so the scene's box in the UI fills as each scene finishes
         ui = {}
@@ -610,12 +610,12 @@ class AMD_SceneWriter:
             Image.fromarray(mid).save(os.path.join(tdir, tname))
             ui = {"images": [{"filename": tname, "subfolder": "", "type": "temp"}]}
         except Exception as e:
-            print(f"[AutoMovieDirector] scene thumbnail skipped: {e}")
+            print(f"[GmanNodes] scene thumbnail skipped: {e}")
         return {"ui": ui, "result": (path,)}
 
 
 class AMD_PathJoin:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("paths",)
     FUNCTION = "join"
@@ -629,7 +629,7 @@ class AMD_PathJoin:
 
 
 class AMD_Stitcher:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("movie_path",)
     FUNCTION = "stitch"
@@ -689,18 +689,18 @@ class AMD_Stitcher:
                 os.makedirs(dest_dir, exist_ok=True)
                 result_path = os.path.join(dest_dir, final_name)
                 shutil.copy2(final_path, result_path)
-                print(f"[AutoMovieDirector] copied movie to: {result_path}")
+                print(f"[GmanNodes] copied movie to: {result_path}")
             except Exception as e:
-                print(f"[AutoMovieDirector] copy to output_dir failed ({e}); movie is at {final_path}")
+                print(f"[GmanNodes] copy to output_dir failed ({e}); movie is at {final_path}")
                 result_path = final_path
 
-        print(f"[AutoMovieDirector] finished movie: {final_path}")
+        print(f"[GmanNodes] finished movie: {final_path}")
         preview = {"filename": final_name, "subfolder": sub, "type": "output"}
         return {"ui": {"images": [preview], "animated": (True,)}, "result": (result_path,)}
 
 
 class AMD_Storyboard:
-    CATEGORY = "AdamGman/🎬 Auto Movie Director"
+    CATEGORY = "GmanNodes/🎬 Auto Movie Director"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("storyboard",)
     FUNCTION = "compose"
@@ -830,9 +830,9 @@ class AMD_Storyboard:
                     f.write((plan.get("plot", "") + "\n\nCHARACTER SHEET\n" + plan.get("sheet", "")).strip() + "\n\n")
                     for s in scenes:
                         f.write(f"[Scene {s['index'] + 1} - {s['seconds']:.1f}s]\n{s.get('core', s['prompt'])}\n\n")
-                print(f"[AutoMovieDirector] storyboard saved to {save_dir}")
+                print(f"[GmanNodes] storyboard saved to {save_dir}")
             except Exception as e:
-                print(f"[AutoMovieDirector] storyboard save failed: {e}")
+                print(f"[GmanNodes] storyboard save failed: {e}")
 
         out = torch.from_numpy(np.asarray(board).astype(np.float32) / 255.0).unsqueeze(0)
         return (out,)
@@ -852,12 +852,12 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AMD_MoviePlanner": "🎬 Movie Planner (Ollama)",
-    "AMD_MovieRenderer": "🎬 Movie Renderer (LTX scenes)",
-    "AMD_LastFrame": "🎬 Last Frame",
-    "AMD_LoadFrame": "🎬 Load Storyboard Frame",
-    "AMD_SceneWriter": "🎬 Scene Writer",
-    "AMD_PathJoin": "🎬 Path Join",
-    "AMD_Stitcher": "🎬 Movie Stitcher (final MP4)",
-    "AMD_Storyboard": "🎬 Storyboard",
+    "AMD_MoviePlanner": "🎬 Ollama Movie Planner (GmanNodes)",
+    "AMD_MovieRenderer": "🎬 LTX Movie Renderer (GmanNodes)",
+    "AMD_LastFrame": "🎬 Last Frame (GmanNodes)",
+    "AMD_LoadFrame": "🎬 Load Storyboard Frame (GmanNodes)",
+    "AMD_SceneWriter": "🎬 Scene Writer (GmanNodes)",
+    "AMD_PathJoin": "🎬 Path Join (GmanNodes)",
+    "AMD_Stitcher": "🎬 Movie Stitcher (GmanNodes)",
+    "AMD_Storyboard": "🎬 Storyboard (GmanNodes)",
 }
