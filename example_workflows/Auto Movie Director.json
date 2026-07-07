@@ -397,7 +397,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### fast frames = approve before you render\n\n## 2) full movie (continuity)\n### THE movie mode: same rooms every time, action flows across cuts\n\n## 3) from storyboard frames\n### every scene starts on its approved frame\n\n## 4) pure text2vid\n### independent scenes, freest look\n\n# Board → approve → mode 2 → Queue"
+        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### continuity-aware board: approve what the film will actually be\n\n## 2) full movie (continuity)\n### THE movie mode: same rooms, action flows across cuts, state persists\n\n## 3) lock to storyboard frames\n### every scene starts on its exact approved tile\n\n## 4) anthology\n### independent scenes, freest look, no persistence\n\n# Board → approve → mode 2 → Queue"
       ],
       "color": "#432",
       "bgcolor": "#653"

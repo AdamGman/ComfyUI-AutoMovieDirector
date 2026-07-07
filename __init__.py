@@ -328,7 +328,7 @@ class AMD_MovieRenderer:
                 "video_vae": ("VAE",),
                 "audio_vae": ("VAE",),
                 "scene_plan": ("STRING", {"forceInput": True}),
-                "mode": (["1) storyboard preview", "2) full movie (continuity)", "3) full movie (from storyboard frames)", "4) full movie (pure text2vid)"], {"default": "1) storyboard preview", "tooltip": "1) fast storyboard for approval. 2) CONTINUITY film: recurring locations are anchored on rendered location plates and 'flow' scenes physically continue from the previous scene's last frame - same rooms, carried action. 3) each scene starts from its approved storyboard frame. 4) pure text-to-video, every scene independent."}),
+                "mode": (["1) storyboard preview", "2) full movie (continuity)", "3) full movie (lock to storyboard frames)", "4) full movie (anthology)"], {"default": "1) storyboard preview", "tooltip": "1) continuity-aware storyboard: tiles anchor on the same location plates and flow chain the film will use - approve what you'll actually get. 2) CONTINUITY film: same rooms via location plates, 'flow' scenes continue from the previous scene's last frame, story state persists. 3) lock every scene's first frame to its approved storyboard tile. 4) anthology: every scene fully independent (freest look, no persistence)."}),
                 "width": ("INT", {"default": 1536, "min": 256, "max": 2048, "step": 32}),
                 "height": ("INT", {"default": 864, "min": 256, "max": 2048, "step": 32}),
                 "fps": ("INT", {"default": 24, "min": 8, "max": 60}),
@@ -358,7 +358,8 @@ class AMD_MovieRenderer:
         m = str(mode).lower()
         is_preview = m.startswith("1") or "preview" in m or "editor" in m
         want_chain = (not is_preview) and ("continuity" in m)
-        want_i2v = (not is_preview) and (not want_chain) and ("text2vid" not in m) and bool(use_storyboard_frames)
+        is_anthology = "anthology" in m or "text2vid" in m
+        want_i2v = (not is_preview) and (not want_chain) and (not is_anthology) and bool(use_storyboard_frames)
         return self._render(model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                             width, height, fps, steps, cfg, sampler, scheduler, seed,
                             preview_size, storyboard_strength, filename_prefix, output_dir,
@@ -395,29 +396,68 @@ class AMD_MovieRenderer:
             return g.node("SamplerCustomAdvanced", noise=noise.out(0), guider=gd.out(0),
                           sampler=ks.out(0), sigmas=sch.out(0), latent_image=latent_ref)
 
+        def build_plates(g, the_model, w, h):
+            """One anchor plate per recurring location. Same seeds/text at same size cache-hit
+            between the storyboard run and the film run."""
+            locations = plan.get("locations") or {"A": f"the main setting of: {plan.get('global_prompt', '')[:180]}"}
+            style_tail = ""
+            if scenes:
+                prefix = f"{plan.get('sheet', '')} {scenes[0].get('core', '')}".strip()
+                if scenes[0]["prompt"].startswith(prefix):
+                    style_tail = scenes[0]["prompt"][len(prefix):].strip()
+            refs = {}
+            for li, (lid, desc) in enumerate(locations.items()):
+                ptxt = f"{desc}, empty of people, no people, cinematic still. {style_tail}".strip()
+                penc = g.node("CLIPTextEncode", clip=clip, text=ptxt)
+                pzero = g.node("ConditioningZeroOut", conditioning=penc.out(0))
+                pcond = g.node("LTXVConditioning", positive=penc.out(0), negative=pzero.out(0), frame_rate=float(fps))
+                plat = g.node("EmptyLTXVLatentVideo", width=w, height=h, length=1, batch_size=1)
+                pnoise = g.node("RandomNoise", noise_seed=(int(seed) + 9000 + li) & (2**63 - 1))
+                pks = g.node("KSamplerSelect", sampler_name=sampler)
+                psch = g.node("BasicScheduler", model=the_model, scheduler=scheduler, steps=int(steps), denoise=1.0)
+                pgd = g.node("CFGGuider", model=the_model, positive=pcond.out(0), negative=pcond.out(1), cfg=float(cfg))
+                psamp = g.node("SamplerCustomAdvanced", noise=pnoise.out(0), guider=pgd.out(0),
+                               sampler=pks.out(0), sigmas=psch.out(0), latent_image=plat.out(0))
+                pdec = g.node("VAEDecode", samples=psamp.out(0), vae=video_vae)
+                refs[lid] = pdec.out(0)
+            return refs
+
         if is_preview:
             pw = int(preview_size) if int(preview_size) > 0 else int(width)
             pw = max(256, (pw // 32) * 32)
             ph = max(256, int(round(pw * height / width / 32)) * 32)
             g = GraphBuilder()
             the_model = stg_model(g)
+            plate_ref = build_plates(g, the_model, pw, ph)
             frames_ref = None
+            prev_ref = None
             for sc in scenes:
                 i = int(sc["index"])
                 enc = g.node("CLIPTextEncode", clip=clip, text=sc["prompt"])
                 zero = g.node("ConditioningZeroOut", conditioning=enc.out(0))
                 cond = g.node("LTXVConditioning", positive=enc.out(0), negative=zero.out(0), frame_rate=float(fps))
-                vlat = g.node("EmptyLTXVLatentVideo", width=pw, height=ph, length=1, batch_size=1)
-                samp = scene_sampling(g, the_model, sc, i, pw, ph, 1, vlat.out(0), cond.out(0), cond.out(1))
+                loc = sc.get("location") or next(iter(plate_ref))
+                if loc not in plate_ref:
+                    loc = next(iter(plate_ref))
+                is_flow = sc.get("continuity") == "flow" and prev_ref is not None
+                guide_ref = prev_ref if is_flow else plate_ref[loc]
+                strength = float(flow_strength) if is_flow else float(cut_strength)
+                i2v = g.node("LTXVImgToVideo", positive=cond.out(0), negative=cond.out(1), vae=video_vae,
+                             image=guide_ref, width=pw, height=ph, length=1,
+                             batch_size=1, strength=strength)
+                samp = scene_sampling(g, the_model, sc, i, pw, ph, 1, i2v.out(2), i2v.out(0), i2v.out(1))
                 vdec = g.node("VAEDecode", samples=samp.out(0), vae=video_vae)
                 g.node("PreviewImage", images=vdec.out(0))  # fires per-scene so the UI fills live
+                prev_ref = vdec.out(0)
+                plate_ref[loc] = vdec.out(0)  # the board previews evolving state too
                 frames_ref = vdec.out(0) if frames_ref is None else g.node("ImageBatch", image1=frames_ref, image2=vdec.out(0)).out(0)
             board = g.node("AMD_Storyboard", images=frames_ref, scene_plan=scene_plan, columns=4, save_dir=board_dir)
             g.node("PreviewImage", images=board.out(0))
             g.node("PreviewImage", images=frames_ref)
-            msg = (f"STORYBOARD saved to: {board_dir}\\storyboard.png (+ scene frames + scenes.txt). "
+            msg = (f"CONTINUITY STORYBOARD saved to: {board_dir}\\storyboard.png (+ scene frames + scenes.txt) - "
+                   f"tiles are anchored on the same location plates and flow chain the film will use. "
                    f"Approve it, then set mode='2) full movie (continuity)' and queue again. "
-                   f"(Keep seed and prompts unchanged.)")
+                   f"(Keep seed and prompts unchanged; at preview_size=0 the plates are reused for free.)")
             return {"result": (msg,), "expand": g.finalize()}
 
         # ---- full movie ----
@@ -431,28 +471,7 @@ class AMD_MovieRenderer:
         the_model = stg_model(g)
 
         # continuity mode: render one anchor plate per recurring location, in-graph
-        plate_ref = {}
-        if want_chain:
-            locations = plan.get("locations") or {"A": f"the main setting of: {plan.get('global_prompt', '')[:180]}"}
-            style_tail = ""
-            if scenes:
-                prefix = f"{plan.get('sheet', '')} {scenes[0].get('core', '')}".strip()
-                if scenes[0]["prompt"].startswith(prefix):
-                    style_tail = scenes[0]["prompt"][len(prefix):].strip()
-            for li, (lid, desc) in enumerate(locations.items()):
-                ptxt = f"{desc}, empty of people, no people, cinematic still. {style_tail}".strip()
-                penc = g.node("CLIPTextEncode", clip=clip, text=ptxt)
-                pzero = g.node("ConditioningZeroOut", conditioning=penc.out(0))
-                pcond = g.node("LTXVConditioning", positive=penc.out(0), negative=pzero.out(0), frame_rate=float(fps))
-                plat = g.node("EmptyLTXVLatentVideo", width=width, height=height, length=1, batch_size=1)
-                pnoise = g.node("RandomNoise", noise_seed=(int(seed) + 9000 + li) & (2**63 - 1))
-                pks = g.node("KSamplerSelect", sampler_name=sampler)
-                psch = g.node("BasicScheduler", model=the_model, scheduler=scheduler, steps=int(steps), denoise=1.0)
-                pgd = g.node("CFGGuider", model=the_model, positive=pcond.out(0), negative=pcond.out(1), cfg=float(cfg))
-                psamp = g.node("SamplerCustomAdvanced", noise=pnoise.out(0), guider=pgd.out(0),
-                               sampler=pks.out(0), sigmas=psch.out(0), latent_image=plat.out(0))
-                pdec = g.node("VAEDecode", samples=psamp.out(0), vae=video_vae)
-                plate_ref[lid] = pdec.out(0)
+        plate_ref = build_plates(g, the_model, width, height) if want_chain else {}
 
         paths_ref = None
         prev_last_ref = None
@@ -782,6 +801,10 @@ class AMD_Storyboard:
             board.paste(tile, (cx, cy))
             draw.rectangle([cx, cy + tile_h, cx + tile_w, cy + tile_h + bar_h], fill=CARD)
             chip = f"SC {i + 1:02d}"
+            if sc.get("location"):
+                chip += f" · {sc['location']}"
+            if sc.get("continuity") == "flow":
+                chip += " · FLOW"
             chip_w = draw.textlength(chip, font=f_chip) + 16
             draw.rounded_rectangle([cx + 10, cy + tile_h + 10, cx + 10 + chip_w, cy + tile_h + 34], radius=5, fill=ACCENT)
             draw.text((cx + 18, cy + tile_h + 13), chip, fill=(20, 20, 24), font=f_chip)
