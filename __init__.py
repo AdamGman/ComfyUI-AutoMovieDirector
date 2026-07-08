@@ -442,15 +442,19 @@ class AMD_MovieRenderer:
                 is_flow = sc.get("continuity") == "flow" and prev_ref is not None
                 guide_ref = prev_ref if is_flow else plate_ref[loc]
                 strength = float(flow_strength) if is_flow else float(cut_strength)
+                # a ~1s micro-roll per tile: anchoring conditions frame 0, so the last
+                # frame has room to bring the scene's subject/action into the plate —
+                # a single-frame roll would just echo the empty location plate
                 i2v = g.node("LTXVImgToVideo", positive=cond.out(0), negative=cond.out(1), vae=video_vae,
-                             image=guide_ref, width=pw, height=ph, length=1,
+                             image=guide_ref, width=pw, height=ph, length=25,
                              batch_size=1, strength=strength)
-                samp = scene_sampling(g, the_model, sc, i, pw, ph, 1, i2v.out(2), i2v.out(0), i2v.out(1))
+                samp = scene_sampling(g, the_model, sc, i, pw, ph, 25, i2v.out(2), i2v.out(0), i2v.out(1))
                 vdec = g.node("VAEDecode", samples=samp.out(0), vae=video_vae)
-                g.node("PreviewImage", images=vdec.out(0))  # fires per-scene so the UI fills live
-                prev_ref = vdec.out(0)
-                plate_ref[loc] = vdec.out(0)  # the board previews evolving state too
-                frames_ref = vdec.out(0) if frames_ref is None else g.node("ImageBatch", image1=frames_ref, image2=vdec.out(0)).out(0)
+                tile = g.node("AMD_LastFrame", images=vdec.out(0))
+                g.node("PreviewImage", images=tile.out(0))  # fires per-scene so the UI fills live
+                prev_ref = tile.out(0)
+                plate_ref[loc] = tile.out(0)  # the board previews evolving state too
+                frames_ref = tile.out(0) if frames_ref is None else g.node("ImageBatch", image1=frames_ref, image2=tile.out(0)).out(0)
             board = g.node("AMD_Storyboard", images=frames_ref, scene_plan=scene_plan, columns=4, save_dir=board_dir)
             g.node("PreviewImage", images=board.out(0))
             g.node("PreviewImage", images=frames_ref)
