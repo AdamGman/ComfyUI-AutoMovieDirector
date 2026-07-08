@@ -330,7 +330,7 @@ class AMD_MovieRenderer:
                 "video_vae": ("VAE",),
                 "audio_vae": ("VAE",),
                 "scene_plan": ("STRING", {"forceInput": True}),
-                "mode": (["1) storyboard preview", "2) full movie (continuity)", "3) full movie (lock to storyboard frames)", "4) full movie (anthology)"], {"default": "1) storyboard preview", "tooltip": "1) continuity-aware storyboard: tiles anchor on the same location plates and flow chain the film will use - approve what you'll actually get. 2) CONTINUITY film: same rooms via location plates, 'flow' scenes continue from the previous scene's last frame, story state persists. 3) lock every scene's first frame to its approved storyboard tile. 4) anthology: every scene fully independent (freest look, no persistence)."}),
+                "mode": (["1) storyboard", "2) storyboard to movie", "3) storyboard to movie (exact frames)", "4) quick movie (scenes independent)"], {"default": "1) storyboard", "tooltip": "1) Make the storyboard: one picture per scene, fast - look it over before spending render time. 2) THE movie button: same hero, same places, a fresh camera angle every scene - and it reuses the storyboard's groundwork for free. 3) Strict version: every scene starts on the exact picture you approved. 4) Skip the storyboard: every scene invents its own look - loosest and most random."}),
                 "width": ("INT", {"default": 1536, "min": 256, "max": 2048, "step": 32}),
                 "height": ("INT", {"default": 864, "min": 256, "max": 2048, "step": 32}),
                 "fps": ("INT", {"default": 24, "min": 8, "max": 60}),
@@ -340,10 +340,10 @@ class AMD_MovieRenderer:
                 "scheduler": (comfy.samplers.SCHEDULER_NAMES, {"default": "linear_quadratic"}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 2**63 - 1, "control_after_generate": False}),
                 "apply_stg": ("BOOLEAN", {"default": True, "tooltip": "Spatio-temporal guidance: better prompt adherence and detail at cfg 1 for a small speed cost."}),
-                "preview_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 32, "tooltip": "Width of the storyboard preview frames. 0 = match the final width (best: full-quality frames that also guide img2vid). Lower for faster, rougher boards."}),
-                "storyboard_strength": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Mode 3: how strongly each scene sticks to its storyboard frame."}),
-                "flow_strength": ("FLOAT", {"default": 0.9, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Continuity mode: how hard a 'flow' scene continues from the previous scene's last frame. High = seamless continuation."}),
-                "cut_strength": ("FLOAT", {"default": 0.6, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Continuity mode: how hard a 'cut' scene anchors on its location plate. Higher = same room stays identical, lower = freer reframing."}),
+                "preview_size": ("INT", {"default": 0, "min": 0, "max": 1536, "step": 32, "tooltip": "Storyboard picture width in pixels. Leave at 0 (= movie width): best quality, and the movie reuses the board's groundwork for free. Lower = faster but rougher board."}),
+                "storyboard_strength": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Mode 3 only: how closely each scene sticks to its approved storyboard picture."}),
+                "flow_strength": ("FLOAT", {"default": 0.9, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "Only for the rare scene the AI marks as an unbroken take: how hard it continues from the previous scene's final image. High = seamless."}),
+                "cut_strength": ("FLOAT", {"default": 0.6, "min": 0.1, "max": 1.0, "step": 0.05, "tooltip": "How strongly each scene locks onto its location's anchor picture. Higher = the room looks identical on every visit; lower = freer framing."}),
                 "filename_prefix": ("STRING", {"default": "auto_movie"}),
                 "output_dir": ("STRING", {"default": "", "tooltip": "Optional extra folder for the final movie. Always also saved to the ComfyUI output folder."}),
             },
@@ -352,6 +352,10 @@ class AMD_MovieRenderer:
             },
         }
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, mode):
+        return True  # accept mode strings from older saved workflows (the list has been renamed across versions)
+
     def render(self, model, clip, video_vae, audio_vae, scene_plan, mode, width, height,
                fps, steps, cfg, sampler, scheduler, seed, preview_size,
                storyboard_strength, filename_prefix, output_dir="",
@@ -359,8 +363,8 @@ class AMD_MovieRenderer:
                flow_strength=0.9, cut_strength=0.6, **_legacy):
         m = str(mode).lower()
         is_preview = m.startswith("1") or "preview" in m or "editor" in m
-        want_chain = (not is_preview) and ("continuity" in m)
-        is_anthology = "anthology" in m or "text2vid" in m
+        want_chain = (not is_preview) and (m.startswith("2") or "continuity" in m)
+        is_anthology = m.startswith("4") or "anthology" in m or "text2vid" in m or "quick" in m
         want_i2v = (not is_preview) and (not want_chain) and (not is_anthology) and bool(use_storyboard_frames)
         return self._render(model, clip, video_vae, audio_vae, scene_plan, is_preview, want_i2v,
                             width, height, fps, steps, cfg, sampler, scheduler, seed,
@@ -460,18 +464,17 @@ class AMD_MovieRenderer:
             board = g.node("AMD_Storyboard", images=frames_ref, scene_plan=scene_plan, columns=4, save_dir=board_dir)
             g.node("PreviewImage", images=board.out(0))
             g.node("PreviewImage", images=frames_ref)
-            msg = (f"CONTINUITY STORYBOARD saved to: {board_dir}\\storyboard.png (+ scene frames + scenes.txt) - "
-                   f"tiles are anchored on the same location plates and flow chain the film will use. "
-                   f"Approve it, then set mode='2) full movie (continuity)' and queue again. "
-                   f"(Keep seed and prompts unchanged; at preview_size=0 the plates are reused for free.)")
+            msg = (f"STORYBOARD saved to: {board_dir}\\storyboard.png - look it over. "
+                   f"Happy? Flip mode to '2) storyboard to movie' and press Queue again. "
+                   f"(Keep your idea and seed unchanged and the movie reuses this board's groundwork for free.)")
             return {"result": (msg,), "expand": g.finalize()}
 
         # ---- full movie ----
         frame_files = [os.path.join(board_dir, f"scene_{int(sc['index']):02d}.png") for sc in scenes]
         use_i2v = want_i2v and all(os.path.isfile(p) for p in frame_files)
         if want_i2v and not use_i2v:
-            print(f"[GmanNodes] no matching storyboard frames for plan {phash} - rendering text-to-video. "
-                  f"(Run '1) storyboard preview' first with the same prompts+seed to lock compositions.)")
+            print(f"[GmanNodes] no matching storyboard pictures for this plan - rendering scenes from text alone. "
+                  f"(Run '1) storyboard' first with the same idea and seed if you want approved pictures to lead.)")
 
         g = GraphBuilder()
         the_model = stg_model(g)

@@ -33,7 +33,7 @@ The included workflow is just the recommended wiring — **the nodes are the pro
 
 ## You approve the film before it renders
 
-Queue once in **storyboard mode**: one frame per scene in minutes, laid out like an edit bay — timecodes, the script under each shot, and a **location + FLOW chip** on every tile so you can read the continuity plan at a glance. The board is **continuity-aware**: tiles are anchored on the very location plates and flow chain the film will use, so what you approve is what renders. Like it? Flip one switch, queue again — the plates are **reused from cache for free**, every scene comes back with motion and a generated soundtrack, and the film lands as one MP4 that plays right on the node.
+Queue once in **`1) storyboard`**: one picture per scene in minutes, laid out like an edit bay — timecodes, the script under each shot, and a **location chip** on every tile so you can see which scenes share a place. The board previews the *actual* film: tiles are built on the same room anchors the movie will use, so what you approve is what renders. Like it? Flip the switch to **`2) storyboard to movie`**, queue again — the movie reuses the board's groundwork for free, every scene comes back with motion and a generated soundtrack, and the film lands as one MP4 that plays right on the node.
 
 ![storyboard](docs/storyboard_v3.png)
 
@@ -47,7 +47,7 @@ git clone https://github.com/AdamGman/ComfyUI-GmanNodes
 ```
 
 Restart ComfyUI → open **`example_workflows/Auto Movie Director.json`** → type your idea → Queue.
-That's the storyboard. Approve it, set mode to `2) full movie (continuity)`, Queue again. 🍿
+That's the storyboard. Approve it, flip the mode switch to `2) storyboard to movie`, Queue again. 🍿
 
 ## How long does it take?
 
@@ -60,10 +60,15 @@ That's the storyboard. Approve it, set mode to `2) full movie (continuity)`, Que
 | **Scenes**: 1–24, each with its own optional prompt box | **Resolution**: anything /32 up to 2048² (1536×864 = 24 GB sweet spot) |
 | **Length**: any seconds per scene (frames auto-snap to LTX's grid) | **Frame rate**: 8–60 fps (24 = cinema) |
 | **LLM**: any [Ollama model](https://ollama.com/library) by name — **auto-downloaded** if missing | **Sampler / scheduler / steps / cfg / seed**: fully exposed |
-| **Style**: one field appended to every scene | **`flow_strength` / `cut_strength` / `storyboard_strength`**: how hard continuity binds |
-| **Per-scene overrides**: your line beats the AI's | **`preview_size`**: 0 = full-res board whose plates the film **reuses for free** |
+| **Style**: one field appended to every scene | **Continuity dials**: how hard scenes stick to their room, their approved picture, or an unbroken take |
+| **Per-scene overrides**: your line beats the AI's | **Storyboard size**: leave at 0 (= movie width) and the movie **reuses the board's groundwork free** |
 
-**Four render modes:** `1) storyboard preview` — now **continuity-aware**: tiles anchor on the same location plates and flow chain the film will use, so the board you approve is the film you get (and at `preview_size = 0` the plates are computed once and **reused for free** by the film render). **`2) full movie (continuity)`** — the movie mode: the planner designs 2–5 recurring locations, each gets a rendered anchor plate so the camera returns to *the same room* every time; every scene is a **fresh camera setup** in that persistent world — same hero, new shot, like real film cuts; every location's anchor **evolves** with what happens in it (tape the window in scene 9 and it's still taped in scene 14); and the rare scene tagged `flow` is an unbroken take that physically starts from the previous scene's last frame. `3) lock to storyboard frames` — every scene starts on its exact approved tile. `4) anthology` — fully independent scenes, the freest look, zero persistence. `flow_strength` / `cut_strength` dials control how hard continuity binds.
+**The four modes on the switch:**
+
+1. **`1) storyboard`** — one picture per scene, fast. The board previews the *actual* film: its tiles are built on the same room anchors the movie will use, so what you approve is what renders.
+2. **`2) storyboard to movie`** — THE movie button. The AI designs a handful of recurring places, each gets a rendered anchor picture, and the camera returns to *the same room* every time. Every scene is a fresh camera setup — same hero, new shot, like real film cuts — and each room *remembers what happened in it* (tape the window in scene 9 and it's still taped in scene 14). The rare scene the AI marks as an unbroken take rolls straight on from the previous scene's final image.
+3. **`3) storyboard to movie (exact frames)`** — the strict version: every scene begins on the exact picture you approved.
+4. **`4) quick movie (scenes independent)`** — skips the storyboard idea entirely: every scene invents its own look. Loosest and most random — fun for showcase reels, not for telling one story.
 
 > Long films: launch ComfyUI with `--cache-lru 60` (the included start script does) to keep RAM bounded across many scenes.
 
@@ -74,7 +79,7 @@ All under the **GmanNodes → 🎬 Auto Movie Director** category in the node me
 | Node | Job |
 |---|---|
 | 🎬 **Ollama Movie Planner (GmanNodes)** | idea → plot, character sheet, **recurring locations + flow/cut continuity tags**, per-scene prompts with shot grammar + sound design. Grows per-scene override boxes with live thumbnails right on the node. |
-| 🎬 **LTX Movie Renderer (GmanNodes)** | one node that expands into a full LTX render chain per scene at runtime — storyboard / continuity / locked-frames / anthology modes, every quality dial exposed. |
+| 🎬 **LTX Movie Renderer (GmanNodes)** | one node that expands into a full LTX render chain per scene at runtime — all four modes on one switch, every quality dial exposed. |
 | 🎬 **Movie Stitcher (GmanNodes)** | ffmpeg-concats the scenes into one MP4 (H.264 + AAC), previews it on the node. |
 | 🎬 Storyboard · Scene Writer · Load Frame · Path Join | the renderer's building blocks — usable standalone in your own graphs. |
 
@@ -119,8 +124,8 @@ output/auto_movie/<your_movie_title>_<id>/
 
 - **Character consistency**: describe your hero *physically* in the idea — body plan, hair, clothes, eye color, size ("a woman in her late 50s with silver hair in a low bun, a terracotta apron…"). The planner repeats those exact facts in every scene prompt.
 - **Keep seed + prompts unchanged** between storyboard and full render — that's how approved frames are matched and how the board's plates cache-hit into the film.
-- **Picking a mode**: `2) continuity` is the movie mode — same rooms, carried action, persistent state. `3) lock to storyboard frames` nails every scene to its exact approved tile (and inherits the tile's look). `4) anthology` is the freest and most photographic — great for showcase reels. The plan is cached, so re-queuing to compare is cheap.
-- **A scene stuck in the previous scene's look** (say, a dawn finale that stays night-dark)? That's `flow` binding hard — lower `flow_strength`, or write that scene's override so the time jump is explicit; big time jumps want a `cut`.
+- **Picking a mode**: `2) storyboard to movie` is the one you want for an actual movie — same hero, same rooms, story state carried. `3` nails every scene to its exact approved picture (and inherits its look). `4` is the freest and most photographic — great for showcase reels. The script is cached, so re-queuing to compare is cheap.
+- **A scene stuck in the previous scene's look** (say, a dawn finale that stays night-dark)? That's the unbroken-take anchor binding hard — lower the flow strength dial, or type that scene's override so the time jump is explicit.
 - Long films: launch with `--cache-lru 60` (the included start script does) so RAM stays bounded — without it, 12+ scenes at high res wants 32 GB+ free.
 
 </details>

@@ -22,7 +22,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# 🎬 AUTO MOVIE DIRECTOR\n\n## 1 — WRITE: type your movie idea in the Planner. Set scenes & seconds.\n\n## 2 — PREVIEW: mode = `1) storyboard preview` → press Queue. Storyboard appears on the Renderer + saved to `output/auto_movie/`.\n\n## 3 — APPROVE: happy? Touch nothing. Not happy? Edit idea/overrides, Queue again.\n\n## 4 — RENDER: flip mode to `2) full movie` → Queue. Scenes start from your approved frames, get motion + sound, stitched into one MP4.\n"
+        "# 🎬 AUTO MOVIE DIRECTOR\n\n## 1 — WRITE. Type your movie idea in the big box on the Movie Planner. Pick how many scenes and how many seconds each scene runs.\n\n## 2 — STORYBOARD. On the Movie Renderer, set the mode switch to \"1) storyboard\" and press Queue. In a few minutes you get one picture per scene, laid out like a comic page.\n\n## 3 — APPROVE. Like it? Touch nothing. Want changes? Edit your idea (or type into any scene's own box) and Queue again.\n\n## 4 — MOVIE. Flip the mode switch to \"2) storyboard to movie\" and press Queue. Every scene comes back with motion and sound, joined into one finished MP4 that plays right on the node.\n"
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -397,7 +397,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# ⬅ THE BIG SWITCH: mode\n\n## 1) storyboard preview\n### continuity-aware board: approve what the film will actually be\n\n## 2) full movie (continuity)\n### THE movie mode: same rooms, action flows across cuts, state persists\n\n## 3) lock to storyboard frames\n### every scene starts on its exact approved tile\n\n## 4) anthology\n### independent scenes, freest look, no persistence\n\n# Board → approve → mode 2 → Queue"
+        "# ⬅ THE MODE SWITCH\n\n## 1) storyboard\n### One picture per scene, fast. Look before you spend render time.\n\n## 2) storyboard to movie\n### THE movie button. Same hero, same places, a fresh camera angle every scene.\n\n## 3) storyboard to movie (exact frames)\n### Strict: every scene starts on the exact picture you approved.\n\n## 4) quick movie (scenes independent)\n### Skips the storyboard. Every scene invents its own look.\n\n# Storyboard first → approve → switch to 2 → Queue"
       ],
       "color": "#432",
       "bgcolor": "#653"
